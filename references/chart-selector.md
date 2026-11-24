@@ -1,0 +1,31 @@
+# Data-to-Chart Decision Matrix
+
+Synthesized from 899 main figures across 167 high-IF original research articles (Nature, Cell, Science, Cancer Cell, Nat Med, Nat Genet, Nat Immunol, Nat Cancer) and 172 curated recipes from `scidraw.msttnote.cn`.
+
+## 1. Biological / Analytical Task -> Recommended Chart
+
+| Data Structure / Scientific Question | Primary CNS Standard | Compact / High-Information Upgrade (CNS + scidraw) | Rasterize Data Layer? |
+| :--- | :--- | :--- | :--- |
+| **Single-cell / spatial clustering & embedding** (`>2k` cells) | UMAP / t-SNE with mini L-axis & direct labels | Multi-condition/stage **small multiples** (gray full-atlas background + dark focal density); density contour overlay; multi-panel gene feature UMAPs | **Yes (600 dpi)** |
+| **Multi-cluster × multi-gene expression** (`5–40` groups × `10–50` genes) | **Marker DotPlot** (size = `% expressed`, color = mean/Z-score) | Grouped top gene-module brackets (`Naive \| Exhausted \| Treg`); thin dark dot border (`0.3 pt`) so pale dots stay visible | No (pure vector) |
+| **Large gene/signature matrix** (`>2,500` cells, e.g., single-cell or bulk cohorts) | **Clustered Heatmap** with top/left annotation tracks | Split-block heatmap by module/subtype; paired side barplot (`Counts` / `Mean`); `ComplexHeatmap` / `imshow` raster body + vector dendrograms & gene names; circular/bubble heatmap for compact radial summaries | **Yes (>2,500 cells, 600 dpi)** |
+| **Two-group differential expression / abundance** (`1k–30k` features) | **Volcano plot** (`log2FC` vs `-log10(Padj)`) | Gray non-significant background + 2 accent colors (up/down) + `ggrepel`/`adjustText` leader lines for top 10–15 genes; **multi-cluster parallel volcano**; **logFC vs logFC** quadrant scatter for 2-condition comparison; inset enrichment barplot | **Yes (>2,000 pts, 600 dpi)** |
+| **Continuous metric across 2–6 groups** (`n = 5–200` samples/group) | **Hollow-fill colored-edge Boxplot + translucent jitter/beeswarm** | Paired samples: add thin gray connecting lines (`alpha=0.25`); large `n` distribution: **half-violin Raincloud (`gghalves`/`ggdist`)** or **Ridge plot**; show exact `P` directly above | No unless `>2,000` pts (e.g., cell-level violin jitter → **Yes**) |
+| **Counts / summary mean ± SEM across 2–6 bars** | **Narrow vertical Bar + individual replicate dots + error bar** | Show every replicate dot (required by Nature/Cell for `n < 20`); split/broken y-axis only when one bar exceeds others by >10×; horizontal bars for long category names | No (pure vector) |
+| **Composition / cell proportions across samples or stages** | **100% Stacked Bar** (vertical or horizontal) | Horizontal 100% stacked bar with hierarchical sub-lineage brackets; **Alluvial / Sankey** for state transitions across timepoints; **Ternary plot** for exactly 3 compartments/timepoints; **Ro/e (Observed/Expected) heatmap** or **Odds Ratio dotplot** for tissue enrichment | No (pure vector) |
+| **Cohort clinical metadata & multi-omic landscape** | **OncoPrint / Clinical Annotation Track** (multi-row color strips) | **Swimmer plot** for individual patient longitudinal treatment & response events; **UpSet plot** for ≥4 set intersections (always prefer UpSet over ≥4-circle Venn) | No (pure vector) |
+| **Time-to-event survival analysis** | **Kaplan-Meier curve** + aligned compact `Number at risk` table | Legend tucked inside upper-right quadrant + log-rank `P` in lower-left; pair with **Forest plot** (alternating gray zebra rows, left table + right HR & 95% CI) for multivariable Cox | No (pure vector) |
+| **Pathway / functional enrichment (GO, KEGG, Hallmark, GSEA)** | **Bidirectional Diverging Barplot** (NES or `-log10(Padj)` up/down) or **Enrichment Bubble Plot** | Multi-pathway overlaid **GSEA running-score curve** with compact left-side FDR column; **Lollipop / Dumbbell plot** for before-vs-after shift; **EnrichmentMap network** when pathways overlap heavily | No (pure vector) |
+| **Bivariate correlation / continuous relationship** | **Scatter + linear/LOESS regression + 95% CI ribbon** | Add marginal histograms/densities on top/right for dense clouds; 2D KDE/contour/hexbin for `>10k` points; **Split-triangle correlation heatmap** (upper vs lower triangle = 2 cohorts) or **Mantel + linkET** network-heatmap for multi-matrix associations | **Yes (>2,000 pts, 600 dpi)** |
+| **Time course / tumor growth / dose-response** | **Line plot with shaded SEM/SD ribbon** (or crisp error bars) | Direct group labels at right line endpoints (eliminates legend!); **Restricted Cubic Spline (RCS)** for nonlinear continuous risk curves | No (pure vector) |
+| **Cell-cell communication & spatial neighborhoods** | **Ligand-receptor DotPlot** or **Interaction Heatmap** | **Chord / Circos diagram** for coarse lineage-to-lineage flow (≤8 lineages); **Spatial neighborhood enrichment heatmap** (diverging avoid/interact score); **Spatial scatter** colored by niche/expression | Spatial cell scatter: **Yes (600 dpi)** |
+| **Pseudotime & differentiation trajectory** | **UMAP with vector trajectory curves/arrows** | Paired with **smoothed pseudotime gene-cascade heatmap** (cells ordered along pseudotime, genes clustered by peak timing) | Cell background & large pseudotime heatmap: **Yes (600 dpi)** |
+| **Diagnostic / ML classifier performance** | **Multi-model ROC / PR curve** (strict 1:1 square) | Compact AUC ± 95% CI legend tucked in lower-right; normalized **Confusion matrix** heatmap | No (pure vector) |
+
+## 2. Quick Selection Heuristics (Anti-Pitfall Rules)
+
+- **Never use pie charts for >4 categories** or subtle differences — use a sorted horizontal barplot or 100% stacked bar.
+- **Never use bar charts without overlaid data points** for biological replicates (`n ≤ 30`) — Nature & Cell explicitly mandate showing individual points or distributions.
+- **Never use Venn diagrams for ≥4 sets** — switch immediately to an **UpSet plot**.
+- **Never use radar/spider charts for unrelated axes or >3 overlaid series** — prefer a small-multiple lollipop, dotplot, or heatmap unless axes form a meaningful circular profile.
+- **When showing >15 cell clusters in UMAP + markers**: pair a compact direct-labeled UMAP (`~45–55 mm`) with a grouped DotPlot (`~110–125 mm`) in the same 180 mm row.
