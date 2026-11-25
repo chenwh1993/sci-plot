@@ -1086,3 +1086,82 @@ load_manuscript_palette <- function(json_path) {
   }
   jsonlite::fromJSON(json_path)
 }
+
+# ---------------------------------------------------------------------------
+# Strict 1-Panel = 1-Unique-Letter Tagging & Visual Hero Layout Helpers (R)
+# ---------------------------------------------------------------------------
+
+#' Enforce CNS 1-Panel = 1-Unique-Letter Tagging (90.4% across 8,852 CNS panels)
+#' Stamps bold Arial sequential letters ('a','b','c' for Nature; 'A','B','C' for Cell/Science)
+#' onto every independent ggplot panel in a patchwork object (never sharing 1 letter across distinct charts!).
+tag_panels_1to1 <- function(pw_obj, journal = c("nature", "cell", "science"),
+                            preset = "cns_compact") {
+  if (!requireNamespace("patchwork", quietly = TRUE)) {
+    stop("Install patchwork for 1-to-1 panel tagging.")
+  }
+  journal <- match.arg(journal)
+  p <- TYPOGRAPHY_PRESETS[[preset]]
+  tag_lvl <- if (journal == "nature") "a" else "A"
+  tag_sz  <- if (journal == "cell" && preset == "cns_compact") 9 else p$panel_label
+  pw_obj + patchwork::plot_annotation(
+    tag_levels = tag_lvl,
+    theme = ggplot2::theme(
+      plot.tag = ggplot2::element_text(
+        family = "Arial", face = "bold", size = tag_sz, colour = "#000000"
+      )
+    )
+  )
+}
+
+#' Exact 1:1 mm Illustrator Drop-In Placeholder Frame for Real Imaging / Pathology / MRI / mIF
+plot_visual_placeholder_r <- function(modality = "H&E / mIF / MRI",
+                                      title = NULL,
+                                      size_note = NULL,
+                                      scalebar_note = "Scale bar: 100 \u03bcm",
+                                      dark_style = FALSE) {
+  bg <- if (dark_style) "#141414" else "#F8F9FA"
+  fg <- if (dark_style) "#E5E7EB" else "#334155"
+  lbl <- paste(c(modality, size_note, scalebar_note), collapse = "\n")
+  p <- ggplot2::ggplot() +
+    ggplot2::annotate("rect", xmin = 0, xmax = 1, ymin = 0, ymax = 1,
+                      fill = bg, colour = "#64748B", linetype = "dashed",
+                      linewidth = pt_to_lwd(0.65)) +
+    ggplot2::annotate("text", x = 0.5, y = 0.5, label = lbl,
+                      family = "Arial", size = pt_to_ggtext(6.5), colour = fg) +
+    ggplot2::coord_cartesian(xlim = c(0, 1), ylim = c(0, 1), expand = FALSE) +
+    ggplot2::theme_void() +
+    ggplot2::theme(plot.title = ggplot2::element_text(family = "Arial", size = 7, hjust = 0.5))
+  if (!is.null(title)) p <- p + ggplot2::labs(title = title)
+  p
+}
+
+#' Compose a Visual-Hero Main Figure reserving 38-50% plate area for real imaging (H&E/mIF/MRI/gross tumor)
+#' paired with strictly 1-letter-each quantitative ggplot panels via patchwork.
+compose_visual_hero_r <- function(hero_plot, quant_plots,
+                                  layout = c("top_band", "left_two_thirds"),
+                                  hero_height_frac = 0.42,
+                                  quant_ncol = 3,
+                                  journal = c("nature", "cell", "science"),
+                                  preset = "cns_compact") {
+  if (!requireNamespace("patchwork", quietly = TRUE)) {
+    stop("Install patchwork to compose visual-hero layouts.")
+  }
+  layout <- match.arg(layout)
+  journal <- match.arg(journal)
+  hf <- max(0.32, min(0.58, hero_height_frac))
+
+  if (layout == "left_two_thirds" && length(quant_plots) >= 2) {
+    right_col <- quant_plots[[1]] / quant_plots[[2]]
+    top_block <- (hero_plot | right_col) + patchwork::plot_layout(widths = c(2, 1))
+    if (length(quant_plots) > 2) {
+      bot_block <- patchwork::wrap_plots(quant_plots[3:length(quant_plots)], ncol = quant_ncol)
+      pw <- (top_block / bot_block) + patchwork::plot_layout(heights = c(hf, 1 - hf))
+    } else {
+      pw <- top_block
+    }
+  } else {
+    bot_block <- patchwork::wrap_plots(quant_plots, ncol = quant_ncol)
+    pw <- (hero_plot / bot_block) + patchwork::plot_layout(heights = c(hf, 1 - hf))
+  }
+  tag_panels_1to1(pw, journal = journal, preset = preset)
+}

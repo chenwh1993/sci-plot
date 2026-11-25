@@ -41,6 +41,9 @@ Use this lookup table to set exact `(width_mm, height_mm)` when generating a sin
 | **Marker DotPlot (`G` genes × `C` clusters)** | **Matrix-driven** (typ. `85–140 × 42–60`) | `1.5–2.8 : 1` | W 74 (63–105), H 39 | `W ≈ 24 + 2.8 × G` mm; `H ≈ 18 + 2.6 × C` mm |
 | **Heatmap (`M` cols × `N` rows)** | **Matrix-driven** (typ. `65–180 × 45–80`) | `1.2–3.5 : 1` (or `0.7:1` tall) | W 81 (54–105), H 49 | Tall 15–25 gene heatmap: `38–48 × 55 mm`; 60–80 gene panel: `175 × 50 mm` |
 | **Forest Plot (Cox HR)** | **`85 × 65`** to **`110 × 95`** | `0.9–1.3 : 1` | W 88, H 70 | `H ≈ 16 + 3.8 × n_rows` mm; alternating zebra shading |
+| **Hero Real-Image Strip (`hero_pathology_strip` / `hero_mif_codex_panel` / `hero_radiology_mri_ct`)** | **`174–180 × 65–92`** | `2.0–2.8 : 1` (**Full-Width Hero Band!**) | **35–48% of plate height!** | Multi-condition H&E/IHC/mIF overview + magnified ROI + channels, or Pre/Post clinical MRI/CT showcase |
+| **2/3-Width Real Visual Hero (`pathology_he_ihc` / `mif_hero` / `radiology_mri_ct` / `gross_tumor_ivis`)** | **`115–122 × 58–82`** | `1.5–2.0 : 1` (**2/3 Row Hero!**) | Paired w/ 1/3 quant column | High-impact representative H&E/IHC/mIF/MRI/excised tumors with ruler; never shrink `< 80 mm` wide! |
+| **1/2-Width Single-FOV Histology / Organoid / Blot (`histology` / `ihc` / `organoid_microscopy` / `western_blot`)** | **`86–90 × 52–62`** | `1.3–1.7 : 1` | **1/2 Row** | Minimum crisp readable scale bar & cellular detail (`600 dpi` raster + vector scale bar/kDa) |
 
 ---
 
@@ -73,3 +76,38 @@ Use this lookup table to set exact `(width_mm, height_mm)` when generating a sin
 4. **Compact tick labels & strategic rotation**: Keep ≤5 numeric ticks per axis; rotate 3–5 word x-labels **45°** (`ha='right'`), dense gene names / >6 groups **90°**, or wrap 2-word labels onto 2 lines (`"Brain\nmetastases"`).
 5. **Tight padding everywhere**: `axes.labelpad = 2.5 pt`, `xtick/ytick.major.pad = 2.0 pt`, `legend.handletextpad = 0.35`, `legend.columnspacing = 0.8`.
 6. **Zero prose inside plots**: Put only concise labels, `n`, and exact `P`/`r`/`HR`. Move all interpretive descriptions to the caption.
+
+---
+
+## 5. Strict `1-Panel = 1-Unique-Letter` Indexing Law (`90.4%` CNS Standard)
+
+Empirically audited across **`8,852` panel descriptions in `2,091` CNS Main Figures**: **`90.4%`** strictly assign **ONE unique panel letter (`a, b, c...` / `A, B, C...`) to ONE independent analytical plot**, while multi-chart bundling under a single letter occurs in only **`3.0%`**.
+
+- **Hard Rule (Default)**: Every distinct analytical plot (`UMAP`, `boxplot`, `barplot`, `volcano`, `heatmap`, `KM`, `forest`, `dotplot`, `scatter`, `spatial map`) MUST receive its **own unique sequential top-left bold Arial letter** via `label_all_panels()` (Python) or `tag_panels_1to1()` (R).
+- **Strictly Forbidden**:
+  - NEVER let `Fig. 1a` cover a UMAP + proportion barplot (`a` = UMAP, `b` = barplot!).
+  - NEVER let `Fig. 2b` cover 3 unrelated boxplots or 2 different statistical assays (`b, c, d` separately!).
+  - NEVER bundle a representative microscopy photo + its statistical boxplot under one letter when space permits — **strongly prefer `a` (representative image) + `b` (cohort quantification)** so text references (`(Fig. 3a, b)`) and Illustrator assembly stay modular.
+- **The ONLY 3 Narrow Allowed Exceptions**:
+  1. **Overview + Magnified ROI Zoom / Split Fluorescence Channels** of the **exact same tissue FOV** (connected by a crisp ROI box or labeled `DAPI / CD8 / SPP1 / Merge`).
+  2. **Identical-Assay Small-Multiple Strip** sharing identical axes, chart type, and a single shared colorbar/scale bar (e.g., 3 FeaturePlots on the same UMAP, or `Vehicle vs Treated` H&E/MRI images of identical scale).
+  3. **Structurally Inseparable Composite Widget** (`KM + aligned Number-at-risk table`, `OncoPrint + top TMB + clinical tracks`, `plot_atlas_umap_composite` with major-lineage inset).
+
+---
+
+## 6. Visual Hero Zone Layouts for Real Imaging / Pathology / Radiology (`35–55%` Area Reservation)
+
+Across `2,091` CNS Main Figures (`65.1%` of manuscripts; `42.4%` of *Cancer Cell* and `39.4%` of *Nature* Main Figures), real visual evidence (**MRI/CT/PET, H&E, IHC, mIF/CODEX/IMC, gross excised tumors/IVIS, organoids**) serves as the primary visual anchor ("seeing is believing") and routinely occupies **`35–55%` of the Main Figure canvas**.
+
+Use one of these **3 CNS Hero Grid Blueprints** (`create_visual_hero_layout()` in Python / `compose_visual_hero_r()` in R):
+
+1. **Blueprint A — Full-Width Top Hero Band (`40–48%` height) + Quantitative Rows Below** *(Best for multi-group mIF/CODEX, H&E overview + zooms, or longitudinal Pre/Post MRI/CT)*:
+   - Row 1 (`180 × 75–90 mm`): **`a`** Full-width real visual showcase (e.g., Pre vs Post MRI + H&E + magnified boundary zoom, OR 3-group mIF + zoom).
+   - Rows 2–3 (`180 × 115–130 mm`): **`b, c, d, e, f, g`** Crisp 1-letter-each statistical validations, spatial boundary gradients, and KM survival.
+2. **Blueprint B — Asymmetric Left `2/3` Visual Hero + Right `1/3` Stacked Quant** *(Best for high-impact single-cohort tissue showcase paired immediately with its exact statistical proof)*:
+   - Top block (`180 × 85–95 mm`): Left `118 × 90 mm` **`a`** (Large H&E/mIF/gross-tumor hero image) | Right `58 × 43 mm` **`b`** (Quantification 1) stacked over `58 × 43 mm` **`c`** (Quantification 2).
+   - Bottom rows (`180 × 110 mm`): **`d, e, f, g`** Downstream mechanistic & clinical validation panels.
+3. **Blueprint C — Twin Visual Anchor Plate** *(Best for *in vivo* therapy / clinical translation figures)*:
+   - Row 1 (`180 × 64 mm`): **`a`** Gross excised tumors with ruler / IVIS bioluminescence (`115 × 64 mm`) + **`b`** Tumor growth curve (`60 × 64 mm`).
+   - Row 2 (`180 × 68 mm`): **`c`** Representative IHC/mIF of Control vs Treated (`115 × 68 mm`) + **`d`** Quantification boxplot (`60 × 68 mm`).
+   - Row 3 (`180 × 60 mm`): **`e, f, g`** Flow/immune infiltration + survival curves.

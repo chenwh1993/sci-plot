@@ -581,6 +581,167 @@ def add_panel_label(
     )
 
 
+def label_all_panels(
+    axes_list: Sequence[plt.Axes],
+    start: str = "a",
+    preset: str = "cns_compact",
+    journal: str = "nature",
+    x: float = -0.14,
+    y: float = 1.06,
+    skip_axes: Optional[Sequence[plt.Axes]] = None,
+) -> Dict[str, plt.Axes]:
+    """
+    Enforce the CNS 1-Panel = 1-Unique-Letter Law (90.4% across 8,852 CNS panels):
+    Automatically stamp ONE unique sequential bold Arial panel letter ('a','b','c'... or 'A','B','C'...)
+    onto every independent analytical panel in reading order.
+    Pass attached colorbars, KM risk tables, or ROI zoom insets in `skip_axes` ONLY.
+    """
+    skip_ids = {id(a) for a in (skip_axes or [])}
+    idx = ord(start.lower()) - ord("a")
+    mapping: Dict[str, plt.Axes] = {}
+    for ax in axes_list:
+        if ax is None or id(ax) in skip_ids:
+            continue
+        raw_ch = chr(ord("a") + idx)
+        lbl = raw_ch.lower() if journal == "nature" else raw_ch.upper()
+        add_panel_label(ax, lbl, preset=preset, journal=journal, x=x, y=y)
+        mapping[lbl] = ax
+        idx += 1
+    return mapping
+
+
+def plot_real_image_panel(
+    ax: plt.Axes,
+    image_or_path,
+    title: Optional[str] = None,
+    scalebar_label: Optional[str] = None,
+    scalebar_frac: float = 0.16,
+    dark_bg: bool = False,
+    roi_box_frac: Optional[Tuple[float, float, float, float]] = None,
+    roi_color: str = "#FFFFFF",
+    border_lw: float = 0.45,
+) -> None:
+    """
+    Render a real visual evidence panel (MRI/CT, H&E, IHC, mIF/CODEX, gross tumor/IVIS, organoid)
+    with locked 1:1 physical aspect ratio, zero pixel coordinate axes, optional vector ROI zoom box
+    (x0, y0, w, h in axes fraction), and crisp vector physical scale bar.
+    """
+    import matplotlib.image as mpimg
+    from matplotlib.patches import Rectangle
+
+    img = mpimg.imread(image_or_path) if isinstance(image_or_path, str) else np.asarray(image_or_path)
+    ax.imshow(img, interpolation="nearest")
+    ax.set_aspect("equal")
+    ax.set_xticks([])
+    ax.set_yticks([])
+    for sp in ax.spines.values():
+        sp.set_visible(border_lw > 0)
+        sp.set_linewidth(border_lw)
+        sp.set_edgecolor("#CCCCCC" if not dark_bg else "#333333")
+    if title:
+        ax.set_title(title, fontsize=7.0, pad=2.5, color="#000000")
+    if roi_box_frac is not None:
+        rx, ry, rw, rh = roi_box_frac
+        rect = Rectangle(
+            (rx, ry), rw, rh, transform=ax.transAxes,
+            fill=False, edgecolor=roi_color, linewidth=0.75, linestyle="--", zorder=6,
+        )
+        ax.add_patch(rect)
+    if scalebar_label:
+        fg = "#FFFFFF" if dark_bg else "#1A1A1A"
+        bg_pill = "#000000" if dark_bg else "#FFFFFF"
+        x1 = 0.96
+        x0 = max(0.04, x1 - scalebar_frac)
+        yb = 0.06
+        ax.plot([x0, x1], [yb, yb], transform=ax.transAxes, color=fg, linewidth=1.6, solid_capstyle="butt", zorder=8)
+        ax.text(
+            0.5 * (x0 + x1), yb + 0.025, scalebar_label,
+            transform=ax.transAxes, ha="center", va="bottom",
+            fontsize=5.5, fontweight="bold", color=fg, zorder=9,
+            bbox=dict(boxstyle="round,pad=0.12", facecolor=bg_pill, edgecolor="none", alpha=0.65),
+        )
+
+
+def add_visual_placeholder_frame(
+    ax: plt.Axes,
+    modality: str = "H&E / mIF / MRI",
+    title: Optional[str] = None,
+    size_note: Optional[str] = None,
+    scalebar_note: Optional[str] = "Scale bar: 100 μm",
+    dark_style: bool = False,
+) -> None:
+    """
+    Reserve an exact 1:1 mm Adobe Illustrator-ready Hero Visual Frame inside a composite figure
+    so real pathology (H&E/IHC), multiplex IF/CODEX, radiology (MRI/CT), or gross-tumor photos
+    have dedicated high-visibility real estate (35-55% of plate area) without squishing.
+    """
+    bg = "#141414" if dark_style else "#F8F9FA"
+    fg = "#E5E7EB" if dark_style else "#334155"
+    border = "#64748B"
+    ax.set_facecolor(bg)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    for sp in ax.spines.values():
+        sp.set_visible(True)
+        sp.set_linestyle("--")
+        sp.set_linewidth(0.65)
+        sp.set_edgecolor(border)
+    if title:
+        ax.set_title(title, fontsize=7.0, pad=2.5, color="#000000")
+    lines = [modality]
+    if size_note:
+        lines.append(size_note)
+    if scalebar_note:
+        lines.append(scalebar_note)
+    ax.text(0.5, 0.5, "\n".join(lines), ha="center", va="center", fontsize=6.5, color=fg, transform=ax.transAxes)
+
+
+def create_visual_hero_layout(
+    journal: str = "nature",
+    layout: str = "top_band",
+    hero_height_frac: float = 0.42,
+    n_quant_rows: int = 2,
+    quant_cols: int = 3,
+    preset: str = "cns_compact",
+) -> Tuple[plt.Figure, Dict[str, object]]:
+    """
+    Create a 1:1 mm full-page Main Figure GridSpec reserving 35-55% hero real estate for real
+    pathology / radiology / mIF / gross-tumor imaging alongside strict 1-panel-1-letter quant slots.
+
+    Parameters
+    ----------
+    journal : 'nature' (180x215 mm), 'cell' (174x210 mm), or 'science' (184x215 mm)
+    layout  : 'top_band' (full-width visual hero row on top + quant rows below) OR
+              'left_two_thirds' (2/3-width visual hero on top-left + 1/3 stacked quant on top-right + bottom quant row)
+    hero_height_frac : fraction of figure height reserved for the Visual Hero Zone (recommended 0.38-0.50)
+    """
+    dims = {"nature": (180.0, 215.0), "cell": (174.0, 210.0), "science": (184.0, 215.0)}
+    w_mm, h_mm = dims.get(journal, (180.0, 215.0))
+    fig = new_cns_figure(w_mm, h_mm, preset=preset)
+    hero_frac = float(np.clip(hero_height_frac, 0.32, 0.58))
+
+    if layout == "left_two_thirds":
+        gs_outer = fig.add_gridspec(2, 1, height_ratios=[hero_frac, 1.0 - hero_frac], hspace=0.22)
+        gs_top = gs_outer[0].subgridspec(1, 2, width_ratios=[2.0, 1.0], wspace=0.18)
+        ax_hero = fig.add_subplot(gs_top[0, 0])
+        gs_tr = gs_top[0, 1].subgridspec(2, 1, hspace=0.35)
+        right_axes = [fig.add_subplot(gs_tr[0, 0]), fig.add_subplot(gs_tr[1, 0])]
+        gs_bot = gs_outer[1].subgridspec(max(1, n_quant_rows - 1), quant_cols, hspace=0.36, wspace=0.28)
+        bot_axes = [fig.add_subplot(gs_bot[r, c]) for r in range(max(1, n_quant_rows - 1)) for c in range(quant_cols)]
+        ordered = [ax_hero] + right_axes + bot_axes
+        return fig, {"hero_ax": ax_hero, "quant_axes": right_axes + bot_axes, "ordered_axes": ordered, "size_mm": (w_mm, h_mm)}
+
+    # Default: 'top_band' full-width Visual Hero Band on top + crisp quantitative grid below
+    gs_outer = fig.add_gridspec(2, 1, height_ratios=[hero_frac, 1.0 - hero_frac], hspace=0.22)
+    ax_hero = fig.add_subplot(gs_outer[0])
+    gs_bot = gs_outer[1].subgridspec(n_quant_rows, quant_cols, hspace=0.38, wspace=0.28)
+    quant_axes = [fig.add_subplot(gs_bot[r, c]) for r in range(n_quant_rows) for c in range(quant_cols)]
+    ordered = [ax_hero] + quant_axes
+    return fig, {"hero_ax": ax_hero, "quant_axes": quant_axes, "ordered_axes": ordered, "size_mm": (w_mm, h_mm)}
+
+
 def add_umap_corner_axes(
     ax: plt.Axes,
     xlabel: str = "UMAP1",
