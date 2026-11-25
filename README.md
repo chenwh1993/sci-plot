@@ -2,13 +2,23 @@
 
 An empirically distilled **Agent Skill** for generating **publication-ready scientific figures** (*Nature*, *Cell*, *Science*, *Nature Medicine*, *Cancer Cell* standard) in **Python** (`matplotlib` / `seaborn` / `scanpy`) and **R** (`ggplot2` / `ggrastr` / `ComplexHeatmap`), ready for 1:1 millimeter assembly in **Adobe Illustrator**.
 
-Distilled quantitatively from 167 high-impact original research articles (899 main figures, 3,859 subpanel slots, >100,000 vector text spans, 1,527 verbatim axis labels) and 172 chart recipes.
+Distilled quantitatively from **5,000+ high-impact original research articles** (deep vector/color/typography audit of 167 Tier-1 CNS papers + large-scale chart-choice audit of **4,968 post-2020 tumor single-cell/spatial/multi-omics papers** covering 38,306 captions and 141,092 subpanels + vector label-tilt measurement of 504 categorical x-axes across 294 Tier-1 PDFs) and 172 chart recipes.
 
 ---
 
 ## Visual Preview
 
-### 1. Single-Row 4-Panel Hybrid Vector + Raster Figure (`180 × 52 mm`, 503 KB PDF)
+### 1. Tumor-Omics High-Craft & Eye-Catching Gallery (`180 × 106 mm`, 124 KB PDF)
+Dual-track upgrades beyond flat defaults: **outlined-pastel bars + smart `+45°` tilted labels**, **opposite-embedded diverging GSEA**, **enrichment lollipop**, **CNS Raincloud**, **multi-cluster track volcano**, and **Zemin Zhang $R_{o/e}$ tissue-preference matrix**.
+
+![Tumor-omics eye-catching gallery](assets/demo_v2_eyecatching_gallery.png)
+
+### 2. Clinical & Correlation Upgrades (`180 × 54 mm`, 66 KB PDF)
+**Paired Pre/Post longitudinal slope + half-box**, **oncology RECIST waterfall**, and **split-triangle correlation matrix**.
+
+![Clinical and correlation upgrades](assets/demo_v2_clinical_and_corr.png)
+
+### 3. Single-Row 4-Panel Hybrid Vector + Raster Figure (`180 × 52 mm`, 503 KB PDF)
 600 dpi rasterized data layers (25k-cell UMAP, 15k-gene Volcano, 2,880-cell Heatmap) + 100% live editable Arial vector axes, ticks, gene labels, and boxplot.
 
 ![4-panel hybrid CNS figure](assets/demo_4panel_hybrid.png)

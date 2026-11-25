@@ -12,7 +12,7 @@ description: >-
 
 # Scientific Publication Plotting (`sci-plot`)
 
-Distilled empirically from 167 high-IF original research articles (899 main figures, 3,859 subpanel slots, >100,000 vector text spans across *Nature*, *Cell*, *Science*, *Cancer Cell*, *Nature Medicine*, *Nature Genetics*, *Nature Immunology*, *Nature Cancer*), 172 chart recipes from `scidraw.msttnote.cn`, and official *Nature*/*Cell Press*/*Science* artwork specifications.
+Distilled empirically from **5,000+ high-IF original research articles** (deep vector/color/typography audit of 167 Tier-1 CNS papers + large-scale chart-selection audit of **4,968 post-2020 tumor single-cell/spatial/multi-omics papers** covering 38,306 captions and 141,092 subpanels + vector label-tilt measurement of 504 axes across 294 Tier-1 PDFs), 172 chart recipes from `scidraw.msttnote.cn`, and official *Nature*/*Cell Press*/*Science* artwork specifications.
 
 ## Core Non-Negotiable Rules
 
@@ -66,11 +66,13 @@ Distilled empirically from 167 high-IF original research articles (899 main figu
    - Keep chromatic ink restrained (~5–10% of figure area; desaturated HSL `S ≈ 0.44–0.63`, `L ≈ 0.57–0.71`), and lock global entities in a shared project `palette.json` across Fig. 1–6.
    - Consult [color-architecture.md](./references/color-architecture.md) for lineage hue-families and specialized alternatives.
 
-6. **Concise CNS Axis Labels & Micro-Aesthetics (Anti-Redundancy & Polish)**:
-   - Consult [axis-labels-and-annotations.md](./references/axis-labels-and-annotations.md) and [micro-aesthetics.md](./references/micro-aesthetics.md) on every figure:
+6. **Concise CNS Axis Labels, Smart Label Tilting & Anti-Flatness Visual Craft**:
+   - Consult [axis-labels-and-annotations.md](./references/axis-labels-and-annotations.md), [chart-selector.md](./references/chart-selector.md), and [micro-aesthetics.md](./references/micro-aesthetics.md) on every figure:
    - **Axis labels**: **1–3 words** (max 4), **≤ 22 chars**, **Sentence case**, units in `()` with one leading space, **ZERO `snake_case`**; **delete self-explanatory x-axis titles** on group box/bar/dot/heatmaps; never repeat panel title on y-axis.
+   - **Smart X-Axis Label Tilting (Space Efficiency — measured on 504 CNS axes)**: ALWAYS call `smart_rotate_xticklabels(ax)` (Python) / `smart_x_labels()` (R) on categorical axes (`R = max_label_w_mm / pitch_mm`): `R < 1.15` → `0°`; `1.15 ≤ R < 3.80` → **`+45°` upward-right anchored** (`ha="right", va="top", rotation_mode="anchor"`, used in 96.9% of CNS tilted axes; NEVER `-45°`!); `R ≥ 3.80` (dense DotPlot/Heatmap) → **`+90°` bottom-to-top** (94.7% of CNS vertical axes); `max_len > 22` (long pathways) → **flip horizontally (`barh`) instead of tilting**!
+   - **Dual-Track Chart Craft (Conventional Polished vs. Eye-Catching Upgrades)**: Never settle for flat default bar/box charts! Offer/select between **Track A (Polished Conventional)** (`plot_enhanced_bar` with `outlined_pastel` translucent fill + `0.85 pt` border + white-rimmed dots + `#EFEFEF` subtle grid) and **Track B (Eye-Catching Tumor-Omics Upgrades)**: `plot_lollipop()` (`×3.63` growth!), `plot_diverging_enrichment()` (opposite-side embedded pathway labels!), `plot_raincloud()` (half-violin + slim hollow box + raindrops), `plot_multi_cluster_volcano()` (colored cluster ribbon + mirrored clouds), `plot_roe_bubble_heatmap()` (`×2.18` growth!), `plot_paired_slope()` (`×2.02` growth!), `plot_waterfall_response()` (RECIST), and `plot_split_corr_matrix()`.
    - **Bar/Box/Point/Stroke micro-specs** (`CNS_SPEC` in `sci_plot_py.py` / `sci_plot_r.R`): bar width `0.60` with **zero bottom gap at `y = 0`**; hollow white-fill box width `0.52` (`showfliers=False`/`outlier.shape=NA` when jitter overlaid, `median_lw = 0.9 pt` > `box_lw = 0.55 pt` > `axis_lw = 0.40 pt` > `ref_lw = 0.35 pt`, data curves `1.05 pt`); tight jitter `±0.14`; ribbons `alpha = 0.18`; paired lines `0.35 pt, alpha = 0.30`; DotPlot dots with `0.3 pt` dark outline; Z-score heatmaps clipped symmetrically at `[-2, +2]`; 3–5 ticks per axis with true minus `−`; monotonic sorting for unordered categories; max 2–3 stacked brackets per panel.
-   - **Biological italics**: human genes ALL-CAPS italic (*SPP1*, *TP53*), mouse genes Title-case italic (*Spp1*, *Trp53*), proteins upright (PD-1, CD8, IFN-*γ*), Latin phrases italic (*in vivo*, *in vitro*).
+   - **Biological italics**: human genes ALL-CAPS italic (*SPP1*, *TP53*), mouse genes Title-case italic (*Spp1*, *Trp53*), proteins upright (PD-1, CD8, IFN-*γ*), Latin phrases italic (*in vivo*, *in vitro*, *ex vivo*, *de novo*).
 
 7. **Rigorous Statistical Significance Testing & Anti-Pseudoreplication**:
    - Consult [statistical-tests.md](./references/statistical-tests.md) and use `auto_stat_test()` / `auto_corr_test()` (`sci_plot_py.py` / `sci_plot_r.R`) whenever adding *p*-values or brackets:
@@ -82,8 +84,15 @@ Distilled empirically from 167 high-IF original research articles (899 main figu
 
 ## Standard Workflow (Follow Step by Step)
 
-### Step 1: Classify Data & Choose Chart Type
-Read [chart-selector.md](./references/chart-selector.md) to pick the best primary chart (plus any high-density CNS/scidraw upgrade) matching the user's data structure and biological question.
+### Step 1: Profile Data & Propose Dual-Track Chart Options (Interactive Default)
+1. **Inspect the data structure first**: sample size `n` and biological unit (patients/mice vs raw single cells), number of groups/categories `K`, paired vs unpaired design, unidirectional vs bidirectional (`±`) values, secondary dimensions (gene count, FDR, clinical stage/response), and max category label length (`> 22 chars` → horizontal flip).
+2. **Consult [chart-selector.md](./references/chart-selector.md)** to map the data + biological goal to the matching tumor-omics task.
+3. **Interactive Dual-Track Proposal Rule (Default when the user provides data + goal WITHOUT naming a chart type)**:
+   - Before writing plotting code, concisely propose **2–3 concrete options** tailored to the data profile:
+     - **Option A — Conventional Polished (`Track A`)**: Top CNS workhorse with anti-flatness visual polish (e.g., `outlined_pastel` bars + white-rimmed dots, hollow boxplots, subtle `#EFEFEF` guide grid).
+     - **Option B (and optional C) — Eye-Catching High-Craft (`Track B`)**: 1–2 empirically rising Tier-1 CNS alternatives supported by the data's dimensions (e.g., Lollipop, Opposite-Embedded Diverging Enrichment, Raincloud, Multi-Cluster Track Volcano, $R_{o/e}$ Matrix, Paired Slope, Split-Triangle Correlation, RECIST Waterfall), marking the top recommendation and (for multi-panel rows) balancing **1–2 Track B focal panels + 2–3 clean Track A panels per 180 mm row**.
+   - Let the user choose (`A` / `B` / `C` / `"compare all"`), then immediately execute Steps 2–5.
+   - **Fast-path bypass**: If the user already explicitly requests a specific chart type (e.g., *"plot a lollipop"* / *"use the most eye-catching chart directly"*), skip the proposal and proceed straight to plotting.
 
 ### Step 2: Plan Physical Dimensions & Aspect Ratio
 Read [sizing-and-aspect-ratios.md](./references/sizing-and-aspect-ratios.md). Decide:

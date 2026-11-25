@@ -68,3 +68,25 @@ Empirically distilled from **1,016 rotated Y-axis labels** and **511 horizontal 
 | **Correlation Scatter** | Short variable A (e.g. `CD8⁺ T score`) | Short variable B (e.g. `SPP1 expression`) | Tuck `ρ = 0.68, p = 0.002` inside empty plot corner |
 | **ROC / PR Curve** | `1 − Specificity` (or `False positive rate`) | `Sensitivity` (or `True positive rate`) | Strict 1:1 square; tuck `AUC = 0.89` inside bottom-right |
 | **Pseudotime** | `Pseudotime` | `Expression` (or gene name `*TCF7*`) | Smooth curve + ribbon |
+
+---
+
+## 5. Smart X-Axis Tick Label Tilting (Space Efficiency Rule)
+
+Empirically measured directly from vector text-direction matrices (`line["dir"]`) across **504 categorical x-axes in 294 Tier-1 post-2020 tumor-omics CNS PDFs** (*Nature*, *Cell*, *Cancer Cell*, *Nat Med*, *Nat Cancer*, *Nat Genet*, *Nat Immunol*, *Immunity*, *Science*).
+
+Define the **Horizontal Overflow Ratio**:
+$$R = \frac{\text{max\_label\_width\_mm}}{\text{pitch\_mm}}, \qquad \text{pitch\_mm} = \frac{\text{axis\_width\_mm}}{K_{\text{categories}}}$$
+*(For Arial at 6 pt, `char_width ≈ 1.14 mm`, so a 10-char label is `~11.4 mm` wide.)*
+
+| Overflow Regime (`R`) | Real CNS Empirical Choice | Exact Skill Rule (`smart_rotate_xticklabels` / `smart_x_labels`) | Anchor & Alignment |
+| :--- | :--- | :--- | :--- |
+| **`R < 1.15`** *(plenty room / snug)* | **`94.2%` stay `0°` horizontal** (`n = 361` axes) | Keep **`0°` horizontal** — never tilt unnecessarily | `ha="center", va="top"` (R: `hjust=0.5`) |
+| **`1.15 ≤ R < 1.65`** *(mild overflow on 2-word labels)* | `~65%` 2-line wrap `0°` vs `~35%` tilt | Wrap 2-word labels onto 2 clean lines (`Non-\nresponder`) if wrap brings `R < 1.15`; otherwise tilt **`+45°`** | `0°` centered OR `+45°` right-anchored |
+| **`1.15 ≤ R < 3.80`** *(crowded subtypes, drugs, cohorts, 5–14 cats)* | **`+45°` dominates (`60.9%` in dense zone)** | Tilt **`+45°` upward-right** (or `+30°` when mildly wide) — saves 30–50% horizontal space while staying far easier to read than 90° | **Py**: `rotation=45, ha="right", va="top", rotation_mode="anchor"`<br>**R**: `angle=45, hjust=1, vjust=1` |
+| **`R ≥ 3.80`** *(ultra-dense DotPlot / Heatmap, 15–45 gene columns)* | **`+90°` dominates (`70.4%`)** | Rotate **`+90°` vertical reading bottom-to-top** | **Py**: `rotation=90, ha="right", va="center", rotation_mode="anchor"`<br>**R**: `angle=90, hjust=1, vjust=0.5` |
+| **`max_char_len > 22`** *(long pathways / GSEA / GO terms)* | Horizontal flip (`barh` / `coord_flip()`) | **NEVER tilt long pathway names at 45°/90° on bottom x-axis** — flip horizontally (`barh` or `plot_diverging_enrichment`!) | Horizontal left-to-right y-labels |
+
+### Critical Directional Sign Rule (Measured in 294 Tier-1 CNS PDFs!)
+- **`+45°` beats `-45°` by `31 : 1` (`96.9%`)**; **`+90°` (bottom-to-top) beats `-90°` by `54 : 3` (`94.7%`)**; **`+30°` beats `-30°` `100%`**!
+- **NEVER use negative `-45°` or `-90°` on bottom x-axes** — and ALWAYS set `rotation_mode="anchor"` in matplotlib (and `hjust=1, vjust=1` in ggplot2) so the **top-right tip of each tilted label pins directly beneath its tick mark** instead of floating off to the side!
