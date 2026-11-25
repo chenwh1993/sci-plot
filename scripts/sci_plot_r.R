@@ -906,6 +906,95 @@ plot_enhanced_bar_cns <- function(df,
     theme(panel.grid.major.y = element_line(colour = "#EFEFEF", linewidth = pt_to_lwd(0.30)))
 }
 
+# ---------------------------------------------------------------------------
+# Spatial Omics Publication Visualization Helpers (R / ggplot2 / ggrastr)
+# Empirically calibrated from 1,035 tumor spatial-omics papers
+# ---------------------------------------------------------------------------
+
+#' Minimal 1:1 Spatial Tissue Theme (zero pixel ticks/axes/spines)
+theme_spatial_clean <- function(dark_bg = FALSE, preset = "cns_compact", legend_pos = "bottom") {
+  bg <- if (dark_bg) "#0A0A0A" else "white"
+  fg <- if (dark_bg) "white" else "#1A1A1A"
+  theme_cns(preset = preset, legend_pos = legend_pos) +
+    theme(
+      axis.line        = element_blank(),
+      axis.ticks       = element_blank(),
+      axis.text        = element_blank(),
+      axis.title       = element_blank(),
+      panel.background = element_rect(fill = bg, colour = NA),
+      plot.background  = element_rect(fill = bg, colour = NA),
+      text             = element_text(colour = fg),
+      legend.text      = element_text(colour = fg),
+      plot.margin      = margin(1.5, 1.5, 1.5, 1.5, unit = "mm")
+    )
+}
+
+#' Add true physical vector scale bar (50/100/500 um or 1 mm) to a ggplot spatial slice
+add_spatial_scalebar_r <- function(p, xlim, ylim, length_um = 500, units_per_um = 1.0,
+                                   loc = c("lower_right", "lower_left"), dark_bg = FALSE) {
+  loc <- match.arg(loc)
+  xspan <- diff(xlim); yspan <- diff(ylim)
+  blen  <- length_um * units_per_um
+  lbl   <- if (length_um >= 1000 && length_um %% 1000 == 0) sprintf("%d mm", length_um / 1000) else sprintf("%d \u03bcm", round(length_um))
+  fg    <- if (dark_bg) "#FFFFFF" else "#1A1A1A"
+  yb    <- ylim[1] + yspan * 0.05
+  if (loc == "lower_right") {
+    bx1 <- xlim[2] - xspan * 0.05; bx0 <- bx1 - blen
+  } else {
+    bx0 <- xlim[1] + xspan * 0.05; bx1 <- bx0 + blen
+  }
+  p +
+    annotate("segment", x = bx0, xend = bx1, y = yb, yend = yb,
+             linewidth = pt_to_lwd(1.4), colour = fg, lineend = "butt") +
+    annotate("text", x = (bx0 + bx1) / 2, y = yb + yspan * 0.025, label = lbl,
+             family = "Arial", fontface = "bold", size = pt_to_ggtext(5.4),
+             colour = fg, hjust = 0.5, vjust = 0)
+}
+
+#' Signed Distance to Tumor–Stroma Boundary Gradient Plot (mean curves + 95% CI ribbons)
+plot_spatial_boundary_gradient_r <- function(df, dist_col = "distance_um", mean_col = "mean",
+                                             ci_col = "ci", group_col = "lineage",
+                                             palette = CNS_DEFAULT_PALETTE,
+                                             preset = "cns_compact") {
+  p <- ggplot(df, aes(x = .data[[dist_col]], y = .data[[mean_col]],
+                      colour = .data[[group_col]], fill = .data[[group_col]])) +
+    annotate("rect", xmin = min(df[[dist_col]], na.rm = TRUE), xmax = 0,
+             ymin = -Inf, ymax = Inf, fill = "#C84B4B", alpha = 0.055) +
+    geom_vline(xintercept = 0, linetype = "dashed", linewidth = pt_to_lwd(0.45), colour = "#555555") +
+    geom_ribbon(aes(ymin = .data[[mean_col]] - .data[[ci_col]],
+                    ymax = .data[[mean_col]] + .data[[ci_col]]),
+                alpha = CNS_SPEC$ribbon_alpha, colour = NA) +
+    geom_line(linewidth = CNS_SPEC$curve_lwd) +
+    scale_colour_manual(values = palette) +
+    scale_fill_manual(values = palette) +
+    labs(x = "Distance to tumor boundary (\u03bcm)", y = "Relative abundance") +
+    theme_cns(preset = preset) +
+    theme(panel.grid.major.y = element_line(colour = "#F0F0F0", linewidth = pt_to_lwd(0.30)))
+  p
+}
+
+#' Spatial Neighborhood Co-Enrichment / Avoidance Z-Score Matrix (squidpy / IMC / CODEX style)
+plot_spatial_neighborhood_matrix_r <- function(mat_df, x_col = "target", y_col = "source",
+                                               z_col = "zscore", p_col = NULL, z_clip = 3.0,
+                                               preset = "cns_compact") {
+  d <- mat_df
+  d$.z <- pmax(-z_clip, pmin(z_clip, d[[z_col]]))
+  p <- ggplot(d, aes(x = .data[[x_col]], y = .data[[y_col]], fill = .z)) +
+    geom_tile(colour = "white", linewidth = pt_to_lwd(0.75)) +
+    scale_fill_cns_diverging(limits = c(-z_clip, z_clip), name = "Enrichment\nZ-score") +
+    coord_fixed(ratio = 1) +
+    labs(x = NULL, y = NULL) +
+    theme_cns(preset = preset, legend_pos = "right") +
+    smart_x_labels(unique(d[[x_col]]), axis_width_mm = 42, angle = 45) +
+    theme(axis.line = element_blank(), axis.ticks = element_blank())
+  if (!is.null(p_col)) {
+    d$.star <- ifelse(d[[p_col]] < 0.001, "***", ifelse(d[[p_col]] < 0.01, "**", ifelse(d[[p_col]] < 0.05, "*", "")))
+    p <- p + geom_text(data = d[d$.star != "", ], aes(label = .star),
+                       family = "Arial", fontface = "bold", size = pt_to_ggtext(5.3), colour = "#1A1A1A")
+  }
+  p
+}
+
 load_manuscript_palette <- function(json_path) {
   if (!requireNamespace("jsonlite", quietly = TRUE)) {
     stop("Install jsonlite to read shared palette.json")

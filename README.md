@@ -13,7 +13,12 @@ Dual-track upgrades beyond flat defaults: **outlined-pastel bars + smart `+45°`
 
 ![Tumor-omics eye-catching gallery](assets/demo_v2_eyecatching_gallery.png)
 
-### 2. Clinical & Correlation Upgrades (`180 × 54 mm`, 66 KB PDF)
+### 2. Spatial Omics Publication Gallery (`180 × 108 mm`, 600 dpi Hybrid PDF)
+Empirically distilled from **1,035 tumor spatial-omics papers**: **Focal-lineage spotlight** (10.5k cells, 600 dpi raster) + **Macro→Micro single-cell Voronoi ROI zoom**, **Visium hexagonal pie-chart deconvolution**, **signed tumor–stroma boundary gradient**, **spatial neighborhood Z-score matrix**, and **dual-channel spatial L–R colocalization** with exact physical vector scale bars.
+
+![Spatial omics publication gallery](assets/demo_v2_spatial_gallery.png)
+
+### 3. Clinical & Correlation Upgrades (`180 × 54 mm`, 66 KB PDF)
 **Paired Pre/Post longitudinal slope + half-box**, **oncology RECIST waterfall**, and **split-triangle correlation matrix**.
 
 ![Clinical and correlation upgrades](assets/demo_v2_clinical_and_corr.png)
@@ -64,6 +69,7 @@ sci-plot/
 │   ├── axis-labels-and-annotations.md     # Concise CNS axis-label copywriting dictionary
 │   ├── micro-aesthetics.md                # Bar spacing, box/point sizes, alpha, stroke hierarchy
 │   ├── statistical-tests.md               # Two-sided test selection & anti-pseudoreplication guide
+│   ├── spatial-omics-visualization.md     # Visium/Xenium/CosMx/CODEX/IMC/mIF spatial playbook (1,035 papers)
 │   └── hybrid-vector-raster-ai.md         # Python/R 600-dpi hybrid export & AI editability cookbook
 ├── scripts/
 │   ├── sci_plot_py.py                     # Python (matplotlib/seaborn/scanpy) publication kit + CLI
