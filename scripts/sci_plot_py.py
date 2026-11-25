@@ -2606,6 +2606,435 @@ def plot_spatial_lr_dual(
               ncol=2, frameon=False, fontsize=5.0, handletextpad=0.25, columnspacing=0.6, labelspacing=0.2)
 
 
+# ---------------------------------------------------------------------------
+# 2025–2026 Frontier / Niche Spatial Visualizations (Distilled from 588
+# 2025–2026 high-IF tumor spatial-omics papers)
+# ---------------------------------------------------------------------------
+
+def plot_spatial_streamline(
+    ax: plt.Axes,
+    x: np.ndarray,
+    y: np.ndarray,
+    vx: np.ndarray,
+    vy: np.ndarray,
+    bg_values: Optional[np.ndarray] = None,
+    cmap: str = "gray_crimson",
+    grid_res: int = 36,
+    density: float = 1.15,
+    stream_color: str = "#1A1A1A",
+    scalebar_um: float = 500.0,
+    units_per_um: float = 1.0,
+    pt_size: Optional[float] = None,
+):
+    """
+    2025–2026 Spatial Signaling Flux / Developmental Vector Streamline Field (COMMOT / Spateo style):
+      - Rasterized tissue cells colored by signaling strength (or muted gray)
+      - Interpolated smooth curved vector streamlines masked strictly to tissue footprint!
+    """
+    from scipy.spatial import cKDTree
+
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    vx = np.asarray(vx, dtype=float)
+    vy = np.asarray(vy, dtype=float)
+    n = len(x)
+    rast = n > 2000
+    if pt_size is None:
+        pt_size = 0.45 if n >= 10000 else (0.95 if n >= 3000 else 2.2)
+
+    sm = None
+    if bg_values is not None:
+        bv = np.asarray(bg_values, dtype=float)
+        cm = get_cns_cmap(cmap)
+        norm = mcolors.Normalize(vmin=float(np.nanpercentile(bv, 2)), vmax=float(np.nanpercentile(bv, 98)))
+        ax.scatter(x, y, s=pt_size, c=bv, cmap=cm, norm=norm, alpha=0.78,
+                   linewidths=0, rasterized=rast, zorder=1)
+        sm = mpl.cm.ScalarMappable(norm=norm, cmap=cm)
+    else:
+        ax.scatter(x, y, s=pt_size, c="#E4E4E4", alpha=0.80, linewidths=0, rasterized=rast, zorder=1)
+
+    # Interpolate (vx, vy) onto a regular grid and mask grid points outside tissue boundary
+    gx = np.linspace(float(np.min(x)), float(np.max(x)), grid_res)
+    gy = np.linspace(float(np.min(y)), float(np.max(y)), grid_res)
+    XX, YY = np.meshgrid(gx, gy)
+    pts = np.column_stack([x, y])
+    tree = cKDTree(pts)
+    gpts = np.column_stack([XX.ravel(), YY.ravel()])
+    dists, idxs = tree.query(gpts, k=min(12, n))
+    # Median cell spacing sets tight tissue mask radius
+    nn_d, _ = tree.query(pts, k=2)
+    mask_rad = float(np.median(nn_d[:, 1])) * 3.8
+
+    w = 1.0 / np.maximum(dists, 1e-6) ** 2
+    w /= w.sum(axis=1, keepdims=True)
+    U = np.sum(w * vx[idxs], axis=1).reshape(XX.shape)
+    V = np.sum(w * vy[idxs], axis=1).reshape(YY.shape)
+    outside = dists[:, 0].reshape(XX.shape) > mask_rad
+    U = np.ma.array(U, mask=outside)
+    V = np.ma.array(V, mask=outside)
+    speed = np.hypot(U.filled(0.0), V.filled(0.0))
+    max_sp = max(1e-6, float(np.max(speed)))
+    lw_grid = 0.25 + 0.58 * (speed / max_sp)
+
+    ax.streamplot(
+        gx, gy, U, V, density=density, color=stream_color, linewidth=lw_grid,
+        arrowsize=0.58, arrowstyle="-|>", minlength=0.14, zorder=4,
+    )
+
+    xr = (float(np.min(x)), float(np.max(x)))
+    yr = (float(np.min(y)), float(np.max(y)))
+    xs, ys = max(1e-6, xr[1] - xr[0]), max(1e-6, yr[1] - yr[0])
+    ax.set_xlim(xr[0] - xs * 0.04, xr[1] + xs * 0.04)
+    ax.set_ylim(yr[0] - ys * 0.12, yr[1] + ys * 0.04)
+    add_spatial_scalebar(ax, scalebar_um, units_per_um=units_per_um, loc="lower right")
+    return sm
+
+
+def plot_spatial_bivariate_map(
+    ax: plt.Axes,
+    x: np.ndarray,
+    y: np.ndarray,
+    val_x: np.ndarray,
+    val_y: np.ndarray,
+    name_x: str = "Hypoxia",
+    name_y: str = "IFN-γ",
+    scalebar_um: float = 500.0,
+    units_per_um: float = 1.0,
+    pt_size: Optional[float] = None,
+    legend_rect: Tuple[float, float, float, float] = (0.04, 0.04, 0.22, 0.22),
+) -> None:
+    """
+    2025–2026 3×3 Bivariate Choropleth Spatial Co-Expression Map:
+      - Maps TWO continuous spatial programs simultaneously onto one tissue slice
+      - Embeds a crisp 3×3 2D color legend square with directional axis arrows!
+    """
+    # Classic Joshua Stevens / CNS colorblind-safe 3×3 bivariate palette (row=Y low->high, col=X low->high)
+    BIVAR_3X3 = [
+        ["#E8E8E8", "#E4ACAC", "#C85A5A"],  # Y low:  Neutral -> Soft Rose -> Coral-Red
+        ["#B0D5DF", "#AD9EA5", "#985356"],  # Y mid:  Sky Blue -> Muted Mauve -> Brick-Plum
+        ["#64ACBE", "#627F8C", "#574249"],  # Y high: Steel Teal -> Slate Blue -> Deep Espresso-Plum
+    ]
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    vx = np.asarray(val_x, dtype=float)
+    vy = np.asarray(val_y, dtype=float)
+    n = len(x)
+    rast = n > 2000
+    if pt_size is None:
+        pt_size = 0.45 if n >= 10000 else (1.0 if n >= 3000 else 2.4)
+
+    bx = np.digitize(vx, np.nanquantile(vx, [0.38, 0.75]))  # 0, 1, 2
+    by = np.digitize(vy, np.nanquantile(vy, [0.38, 0.75]))  # 0, 1, 2
+    cols = [BIVAR_3X3[int(iy)][int(ix)] for ix, iy in zip(bx, by)]
+    # Draw high-joint cells slightly on top so dual hotspots stay crisp
+    order = np.argsort(bx + by)
+    ax.scatter(x[order], y[order], s=pt_size, c=np.asarray(cols)[order], alpha=0.90,
+               linewidths=0, rasterized=rast, zorder=2)
+
+    xr = (float(np.min(x)), float(np.max(x)))
+    yr = (float(np.min(y)), float(np.max(y)))
+    xs, ys = max(1e-6, xr[1] - xr[0]), max(1e-6, yr[1] - yr[0])
+    ax.set_xlim(xr[0] - xs * 0.04, xr[1] + xs * 0.04)
+    ax.set_ylim(yr[0] - ys * 0.16, yr[1] + ys * 0.04)
+    add_spatial_scalebar(ax, scalebar_um, units_per_um=units_per_um, loc="lower right")
+
+    # 3×3 Bivariate Square Legend Inset
+    ax_in = ax.inset_axes(list(legend_rect))
+    for r_i in range(3):
+        for c_i in range(3):
+            ax_in.add_patch(mpl.patches.Rectangle(
+                (c_i, r_i), 1.0, 1.0, facecolor=BIVAR_3X3[r_i][c_i], edgecolor="white", lw=0.35
+            ))
+    ax_in.set_xlim(0, 3)
+    ax_in.set_ylim(0, 3)
+    ax_in.set_aspect("equal")
+    ax_in.set_xticks([])
+    ax_in.set_yticks([])
+    for sp_s in ax_in.spines.values():
+        sp_s.set_visible(False)
+    ax_in.annotate("", xy=(3.05, -0.20), xytext=(0.0, -0.20), annotation_clip=False,
+                   arrowprops=dict(arrowstyle="-|>", lw=0.45, color="#1A1A1A", mutation_scale=4.5))
+    ax_in.annotate("", xy=(-0.20, 3.05), xytext=(-0.20, 0.0), annotation_clip=False,
+                   arrowprops=dict(arrowstyle="-|>", lw=0.45, color="#1A1A1A", mutation_scale=4.5))
+    ax_in.text(1.5, -0.55, name_x, ha="center", va="top", fontsize=4.8, color="#1A1A1A")
+    ax_in.text(-0.55, 1.5, name_y, ha="right", va="center", rotation=90, fontsize=4.8, color="#1A1A1A")
+
+
+def plot_spatial_delaunay_contacts(
+    ax: plt.Axes,
+    x: np.ndarray,
+    y: np.ndarray,
+    labels: Sequence[str],
+    palette: Dict[str, str],
+    highlight_pair: Tuple[str, str],
+    max_edge_um: float = 28.0,
+    units_per_um: float = 1.0,
+    scalebar_um: float = 50.0,
+    highlight_color: str = "#B2182B",
+    muted_edge_color: str = "#DCDCDC",
+    node_size: float = 16.0,
+) -> Dict:
+    """
+    2025–2026 Single-Cell Physical Contact / Delaunay Triangulation Graph on Tissue:
+      - Prunes Delaunay edges > max_edge_um (physical contact threshold)
+      - Draws homotypic / background mesh in whisper-light gray and highlights focal
+        heterotypic cell–cell contacts (e.g., Malignant <-> CD8 Tex) in bold crimson!
+    """
+    from scipy.spatial import Delaunay
+    from matplotlib.collections import LineCollection
+
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    lbls = np.asarray([str(v) for v in labels])
+    pts = np.column_stack([x, y])
+    tri = Delaunay(pts)
+
+    edge_set = set()
+    for simp in tri.simplices:
+        for a, b in ((simp[0], simp[1]), (simp[1], simp[2]), (simp[2], simp[0])):
+            edge_set.add((min(a, b), max(a, b)))
+
+    max_d = float(max_edge_um) * float(units_per_um)
+    pa, pb = str(highlight_pair[0]), str(highlight_pair[1])
+    bg_segs, hi_segs = [], []
+    for a, b in edge_set:
+        if np.hypot(x[a] - x[b], y[a] - y[b]) > max_d:
+            continue
+        la, lb = lbls[a], lbls[b]
+        if (la == pa and lb == pb) or (la == pb and lb == pa):
+            hi_segs.append([pts[a], pts[b]])
+        else:
+            bg_segs.append([pts[a], pts[b]])
+
+    if bg_segs:
+        ax.add_collection(LineCollection(bg_segs, colors=muted_edge_color, linewidths=0.28, alpha=0.80, zorder=1))
+    if hi_segs:
+        ax.add_collection(LineCollection(hi_segs, colors=highlight_color, linewidths=0.85, alpha=0.95, zorder=3))
+
+    cols = [palette.get(s, "#CCCCCC") for s in lbls]
+    ax.scatter(x, y, s=node_size, c=cols, edgecolor="white", linewidths=0.35, alpha=0.95, zorder=4)
+
+    xr = (float(np.min(x)), float(np.max(x)))
+    yr = (float(np.min(y)), float(np.max(y)))
+    xs, ys = max(1e-6, xr[1] - xr[0]), max(1e-6, yr[1] - yr[0])
+    ax.set_xlim(xr[0] - xs * 0.04, xr[1] + xs * 0.04)
+    ax.set_ylim(yr[0] - ys * 0.05, yr[1] + ys * 0.04)
+    add_spatial_scalebar(ax, scalebar_um, units_per_um=units_per_um, loc="lower right", pill_bg=True)
+    for sp_s in ax.spines.values():
+        sp_s.set_visible(True)
+        sp_s.set_linewidth(0.45)
+        sp_s.set_edgecolor("#333333")
+    return {"total_contacts": len(bg_segs) + len(hi_segs), "highlighted_contacts": len(hi_segs)}
+
+
+def plot_spatial_ripley_curve(
+    ax: plt.Axes,
+    radii_um: np.ndarray,
+    curves: Dict[str, np.ndarray],
+    curves_ci: Optional[Dict[str, np.ndarray]] = None,
+    csr_envelope: Optional[Tuple[np.ndarray, np.ndarray]] = None,
+    colors: Optional[Dict[str, str]] = None,
+    xlabel: str = "Radius r (μm)",
+    ylabel: str = "Besag's $L(r) - r$",
+) -> None:
+    """
+    2025–2026 Multi-Scale Spatial Point-Process Curve (Ripley's K / Besag's L(r) - r vs r):
+      - Shaded gray CSR (Complete Spatial Randomness) null envelope around y = 0
+      - Positive values = significant spatial attraction/clustering; negative = spatial exclusion!
+    """
+    r = np.asarray(radii_um, dtype=float)
+    names = list(curves.keys())
+    def_pal = get_default_palette(len(names))
+    col_map = colors or {nm: def_pal[i] for i, nm in enumerate(names)}
+
+    ax.yaxis.grid(True, linestyle="-", linewidth=0.30, color="#F0F0F0", zorder=0)
+    ax.set_axisbelow(True)
+    ax.axhline(0.0, color="#555555", linestyle="--", linewidth=0.45, zorder=1)
+
+    if csr_envelope is not None:
+        ax.fill_between(r, csr_envelope[0], csr_envelope[1], facecolor="#CCCCCC",
+                        edgecolor="none", alpha=0.42, zorder=1, label="CSR 95% null")
+
+    for nm in names:
+        y_v = np.asarray(curves[nm], dtype=float)
+        col = col_map[nm]
+        ax.plot(r, y_v, color=col, linewidth=CNS_SPEC["curve_lw"], zorder=3, label=nm)
+        if curves_ci is not None and nm in curves_ci:
+            ci = np.asarray(curves_ci[nm], dtype=float)
+            ax.fill_between(r, y_v - ci, y_v + ci, facecolor=col, edgecolor="none",
+                            alpha=CNS_SPEC["ribbon_alpha"], zorder=2)
+
+    ax.set_xlim(float(np.min(r)), float(np.max(r)))
+    ylo, yhi = ax.get_ylim()
+    ax.set_ylim(ylo, yhi + 0.26 * (yhi - ylo))
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.legend(loc="upper left", frameon=False, fontsize=5.1, handlelength=1.1, labelspacing=0.20)
+
+
+def plot_spatial_niche_network(
+    ax: plt.Axes,
+    niche_names: Sequence[str],
+    niche_sizes: Sequence[float],
+    adj_z: np.ndarray,
+    niche_colors: Optional[Sequence[str]] = None,
+    z_thresh: float = 0.8,
+    pos_color: str = "#C84B4B",
+    neg_color: str = "#3B6EA5",
+) -> None:
+    """
+    2025–2026 Cellular Neighborhood (CN) Border-Adjacency Network Graph (6.7% of Tier-1 CNS):
+      - Nodes arranged cleanly on a circle (zero chaotic overlap!) sized by niche abundance
+      - Curved/straight edges connect niches with |Z| >= z_thresh:
+        coral-red = enriched physical border contact, steel-blue = spatial segregation!
+    """
+    k = len(niche_names)
+    sz = np.asarray(niche_sizes, dtype=float)
+    zmat = np.asarray(adj_z, dtype=float)
+    cols = list(niche_colors) if niche_colors is not None else get_default_palette(k)
+
+    angles = np.linspace(np.pi / 2, np.pi / 2 - 2 * np.pi, k, endpoint=False)
+    xs = np.cos(angles)
+    ys = np.sin(angles)
+
+    max_z = max(1e-6, float(np.max(np.abs(zmat))))
+    for i in range(k):
+        for j in range(i + 1, k):
+            zv = float(zmat[i, j])
+            if abs(zv) < z_thresh:
+                continue
+            ec = pos_color if zv > 0 else neg_color
+            lw = 0.45 + 1.85 * (abs(zv) / max_z)
+            ls = "-" if zv > 0 else "--"
+            ax.plot([xs[i], xs[j]], [ys[i], ys[j]], color=ec, linewidth=lw,
+                    linestyle=ls, alpha=0.72, zorder=2)
+
+    s_norm = (sz - np.min(sz)) / max(1e-6, np.max(sz) - np.min(sz))
+    node_s = 110.0 + 210.0 * s_norm
+    ax.scatter(xs, ys, s=node_s, c=cols, edgecolor="#1A1A1A", linewidths=0.55, zorder=4)
+
+    for i, nm in enumerate(niche_names):
+        rad_lbl = 1.29
+        lx, ly = rad_lbl * xs[i], rad_lbl * ys[i]
+        ha = "center" if abs(xs[i]) < 0.25 else ("left" if xs[i] > 0 else "right")
+        va = "center" if abs(ys[i]) < 0.25 else ("bottom" if ys[i] > 0 else "top")
+        ax.text(lx, ly, str(nm), ha=ha, va=va, fontsize=5.3, fontweight="bold", color="#1A1A1A", zorder=5)
+
+    # Compact edge-polarity legend at bottom
+    handles = [
+        mpl.lines.Line2D([0], [0], color=pos_color, lw=1.2, ls="-", label="Border contact"),
+        mpl.lines.Line2D([0], [0], color=neg_color, lw=1.0, ls="--", label="Segregated"),
+    ]
+    ax.legend(handles=handles, loc="lower center", bbox_to_anchor=(0.5, -0.06),
+              ncol=2, frameon=False, fontsize=5.0, handlelength=1.2, columnspacing=0.8)
+
+    ax.set_xlim(-1.68, 1.68)
+    ax.set_ylim(-1.62, 1.55)
+    ax.set_aspect("equal")
+    ax.axis("off")
+
+
+def plot_spatial_3d_stack(
+    ax: plt.Axes,
+    slices: Sequence[Tuple[np.ndarray, np.ndarray, Sequence[str], str]],
+    palette: Dict[str, str],
+    focal_groups: Optional[Sequence[str]] = None,
+    z_step: float = 0.52,
+    muted_color: str = "#DFDFDF",
+    pt_size: float = 0.55,
+    seed: int = 42,
+) -> None:
+    """
+    2025–2026 2.5D Isometric Oblique Serial-Section Tissue Stack (11.9% of Tier-1 CNS!):
+      - Projects 3–5 aligned serial sections into razor-sharp 2D vector/hybrid isometric perspective
+        (NO clunky mplot3d gray panes!) with frosted slice planes and vertical z-depth rails!
+    slices: list of (x_norm, y_norm, labels, z_label) where x_norm, y_norm in [0, 1].
+    """
+    rng = np.random.default_rng(seed)
+    focal_set = set(str(g) for g in focal_groups) if focal_groups is not None else set(palette.keys())
+
+    def iso(xx, yy, zz):
+        return xx + 0.42 * yy, 0.36 * yy + zz
+
+    n_sl = len(slices)
+    corners_x = np.array([0.0, 1.0, 1.0, 0.0, 0.0])
+    corners_y = np.array([0.0, 0.0, 1.0, 1.0, 0.0])
+
+    # Vertical alignment guide rails at the 4 slice corners
+    z_top = (n_sl - 1) * z_step
+    for cx, cy in ((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)):
+        px0, py0 = iso(cx, cy, 0.0)
+        px1, py1 = iso(cx, cy, z_top)
+        ax.plot([px0, px1], [py0, py1], color="#CCCCCC", linestyle=":", linewidth=0.40, zorder=1)
+
+    for si, (sx, sy, slbls, zlbl) in enumerate(slices):
+        zz = si * z_step
+        base_z = 2 + si * 4
+        # Frosted slice plane polygon
+        bx, by = iso(corners_x, corners_y, zz)
+        ax.fill(bx, by, facecolor="#F9F9F9", edgecolor="#999999", linewidth=0.45, alpha=0.86, zorder=base_z)
+
+        sx = np.asarray(sx, dtype=float)
+        sy = np.asarray(sy, dtype=float)
+        lbls = np.asarray([str(v) for v in slbls])
+        px, py = iso(sx, sy, zz)
+        is_f = np.array([s in focal_set for s in lbls])
+        rast = len(sx) > 1500
+
+        bg_i = np.where(~is_f)[0]
+        fg_i = np.where(is_f)[0]
+        if len(bg_i):
+            ax.scatter(px[bg_i], py[bg_i], s=pt_size * 0.8, c=muted_color, alpha=0.65,
+                       linewidths=0, rasterized=rast, zorder=base_z + 1)
+        if len(fg_i):
+            fcols = [palette.get(lbls[i], "#C84B4B") for i in fg_i]
+            ax.scatter(px[fg_i], py[fg_i], s=pt_size * 1.25, c=fcols, alpha=0.92,
+                       linewidths=0, rasterized=rast, zorder=base_z + 2)
+
+        # Clean z-depth label on left-front corner
+        lx, ly = iso(-0.04, 0.12, zz)
+        ax.text(lx, ly, str(zlbl), ha="right", va="center", fontsize=5.1, color="#333333", zorder=base_z + 3)
+
+    ax.set_xlim(-0.28, 1.48)
+    ax.set_ylim(-0.08, z_top + 0.44)
+    ax.set_aspect("equal")
+    ax.axis("off")
+
+
+def plot_spatial_kde_contours(
+    ax: plt.Axes,
+    x: np.ndarray,
+    y: np.ndarray,
+    focal_mask: np.ndarray,
+    contour_color: str = "#C84B4B",
+    levels: int = 5,
+    scalebar_um: float = 500.0,
+    units_per_um: float = 1.0,
+) -> None:
+    """
+    2025–2026 Topographic Spatial Density Isocontour Hotspots over Muted Tissue Footprint
+    (JCI 2026 / Nat Cell Biol 2026 style).
+    """
+    from scipy.stats import gaussian_kde
+
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    m = np.asarray(focal_mask, dtype=bool)
+    ax.scatter(x, y, s=0.45, c="#E4E4E4", alpha=0.75, linewidths=0, rasterized=(len(x) > 2000), zorder=1)
+    ax.scatter(x[m], y[m], s=0.95, c=contour_color, alpha=0.55, linewidths=0, rasterized=(m.sum() > 2000), zorder=2)
+
+    if m.sum() >= 15:
+        kde = gaussian_kde(np.vstack([x[m], y[m]]))
+        gx = np.linspace(float(np.min(x)), float(np.max(x)), 90)
+        gy = np.linspace(float(np.min(y)), float(np.max(y)), 90)
+        XX, YY = np.meshgrid(gx, gy)
+        Z = kde(np.vstack([XX.ravel(), YY.ravel()])).reshape(XX.shape)
+        lvls = np.linspace(float(np.percentile(Z, 78)), float(np.max(Z)) * 0.96, levels)
+        ax.contour(XX, YY, Z, levels=lvls, colors=contour_color, linewidths=0.55, alpha=0.92, zorder=4)
+
+    add_spatial_scalebar(ax, scalebar_um, units_per_um=units_per_um, loc="lower right")
+
+
 def load_or_init_manuscript_palette(path: str) -> Dict:
     """Load shared manuscript palette.json or create a default starter dictionary."""
     if os.path.exists(path):

@@ -18,7 +18,12 @@ Empirically distilled from **1,035 tumor spatial-omics papers**: **Focal-lineage
 
 ![Spatial omics publication gallery](assets/demo_v2_spatial_gallery.png)
 
-### 3. Clinical & Correlation Upgrades (`180 × 54 mm`, 66 KB PDF)
+### 3. 2025–2026 Frontier & Niche Spatial Gallery (`180 × 108 mm`, 600 dpi Hybrid PDF)
+Empirically distilled from **588 2025–2026 spatial tumor papers**: **signaling flux streamlines (`COMMOT`/`Spateo`)**, **3×3 bivariate choropleth spatial co-expression**, **Delaunay single-cell physical contact mesh**, **multi-scale Ripley's / Besag's `L(r) − r` curve + CSR envelope**, **cellular neighborhood (`CN`) border-adjacency network**, and **2.5D isometric 3D serial-section tissue stack**.
+
+![2025-2026 frontier spatial gallery](assets/demo_v2_spatial_frontier.png)
+
+### 4. Clinical & Correlation Upgrades (`180 × 54 mm`, 66 KB PDF)
 **Paired Pre/Post longitudinal slope + half-box**, **oncology RECIST waterfall**, and **split-triangle correlation matrix**.
 
 ![Clinical and correlation upgrades](assets/demo_v2_clinical_and_corr.png)

@@ -995,6 +995,32 @@ plot_spatial_neighborhood_matrix_r <- function(mat_df, x_col = "target", y_col =
   p
 }
 
+#' Multi-Scale Ripley's / Besag's L(r) - r Spatial Point-Process Curve with CSR Null Envelope (2025-2026 CNS)
+plot_spatial_ripley_curve_r <- function(df, r_col = "r_um", val_col = "L_minus_r",
+                                        group_col = "group", ci_col = NULL,
+                                        csr_lo_col = NULL, csr_hi_col = NULL,
+                                        palette = CNS_DEFAULT_PALETTE,
+                                        preset = "cns_compact") {
+  p <- ggplot(df, aes(x = .data[[r_col]], y = .data[[val_col]],
+                      colour = .data[[group_col]], fill = .data[[group_col]])) +
+    geom_hline(yintercept = 0, linetype = "dashed", linewidth = pt_to_lwd(0.45), colour = "#555555")
+  if (!is.null(csr_lo_col) && !is.null(csr_hi_col)) {
+    p <- p + geom_ribbon(aes(ymin = .data[[csr_lo_col]], ymax = .data[[csr_hi_col]]),
+                         fill = "#CCCCCC", colour = NA, alpha = 0.42, inherit.aes = TRUE)
+  }
+  if (!is.null(ci_col)) {
+    p <- p + geom_ribbon(aes(ymin = .data[[val_col]] - .data[[ci_col]],
+                             ymax = .data[[val_col]] + .data[[ci_col]]),
+                         alpha = CNS_SPEC$ribbon_alpha, colour = NA)
+  }
+  p + geom_line(linewidth = CNS_SPEC$curve_lwd) +
+    scale_colour_manual(values = palette) +
+    scale_fill_manual(values = palette) +
+    labs(x = "Radius r (\u03bcm)", y = expression("Besag's " * italic(L)(italic(r)) - italic(r))) +
+    theme_cns(preset = preset) +
+    theme(panel.grid.major.y = element_line(colour = "#F0F0F0", linewidth = pt_to_lwd(0.30)))
+}
+
 load_manuscript_palette <- function(json_path) {
   if (!requireNamespace("jsonlite", quietly = TRUE)) {
     stop("Install jsonlite to read shared palette.json")
