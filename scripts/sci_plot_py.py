@@ -1463,11 +1463,12 @@ def plot_enhanced_bar(
     auto_tilt: bool = True,
     ylabel: str = "",
     seed: int = 42,
+    show_grid: bool = False,
 ) -> Dict:
     """
     Non-flat CNS-grade bar plot upgrade with 3 artful styles:
       - 'outlined_pastel': translucent pastel fill (alpha=0.28) + crisp 0.9 pt same-hue border
-                           + white-rimmed jittered replicate dots + subtle horizontal guide grid
+                           + white-rimmed jittered replicate dots on a clean gridless L-axis
       - 'solid_crisp': desaturated CNS solid fill (alpha=0.86) + white-rimmed dots + error bars
       - 'lollipop_bar': sleek narrow column + terminal accent marker
     """
@@ -1489,7 +1490,8 @@ def plot_enhanced_bar(
         else:
             errs.append(0.0)
 
-    ax.yaxis.grid(True, linestyle="-", linewidth=0.30, color="#EFEFEF", zorder=0)
+    if show_grid:
+        ax.yaxis.grid(True, linestyle="-", linewidth=0.30, color="#EFEFEF", zorder=0)
     ax.set_axisbelow(True)
 
     bw = CNS_SPEC["bar_width"]
@@ -1550,6 +1552,7 @@ def plot_lollipop(
     dot_size_range: Tuple[float, float] = (14.0, 52.0),
     xlabel: str = "",
     ylabel: str = "",
+    show_grid: bool = False,
 ):
     """
     Eye-catching CNS Lollipop / Cleveland Dot Plot (ideal upgrade for pathway enrichment,
@@ -1588,7 +1591,8 @@ def plot_lollipop(
 
     base = 0.0 if ref_line is None else float(ref_line)
     if horizontal:
-        ax.xaxis.grid(True, linestyle="-", linewidth=0.30, color="#EFEFEF", zorder=0)
+        if show_grid:
+            ax.xaxis.grid(True, linestyle="-", linewidth=0.30, color="#EFEFEF", zorder=0)
         ax.set_axisbelow(True)
         if ref_line is not None:
             ax.axvline(base, color="#777777", linestyle="--", linewidth=0.38, zorder=1)
@@ -1608,7 +1612,8 @@ def plot_lollipop(
         if xlabel:
             ax.set_xlabel(xlabel)
     else:
-        ax.yaxis.grid(True, linestyle="-", linewidth=0.30, color="#EFEFEF", zorder=0)
+        if show_grid:
+            ax.yaxis.grid(True, linestyle="-", linewidth=0.30, color="#EFEFEF", zorder=0)
         ax.set_axisbelow(True)
         if ref_line is not None:
             ax.axhline(base, color="#777777", linestyle="--", linewidth=0.38, zorder=1)
@@ -1636,6 +1641,7 @@ def plot_diverging_enrichment(
     xlabel: str = "NES",
     label_fontsize: float = 5.4,
     group_headers: Optional[Tuple[str, str]] = None,
+    show_grid: bool = False,
 ) -> None:
     """
     Nature Medicine / Cancer Cell Bidirectional Diverging Enrichment Plot (bar or lollipop)
@@ -1651,7 +1657,8 @@ def plot_diverging_enrichment(
     pos = np.arange(n, dtype=float)
     max_abs = max(1e-6, float(np.max(np.abs(sc))))
 
-    ax.xaxis.grid(True, linestyle="-", linewidth=0.30, color="#EFEFEF", zorder=0)
+    if show_grid:
+        ax.xaxis.grid(True, linestyle="-", linewidth=0.30, color="#EFEFEF", zorder=0)
     ax.set_axisbelow(True)
     ax.axvline(0.0, color="#1A1A1A", linewidth=0.45, zorder=3)
 
@@ -1702,6 +1709,7 @@ def plot_raincloud(
     show_stat: bool = True,
     auto_tilt: bool = True,
     seed: int = 42,
+    show_grid: bool = False,
 ) -> Optional[Dict]:
     """
     CNS-Grade Raincloud Plot (Half-violin density cloud + narrow hollow boxplot + jittered
@@ -1715,7 +1723,8 @@ def plot_raincloud(
     xs = np.arange(k, dtype=float)
     clean_vals = [np.asarray(v, dtype=float)[np.isfinite(np.asarray(v, dtype=float))] for v in values_per_group]
 
-    ax.yaxis.grid(True, linestyle="-", linewidth=0.30, color="#F2F2F2", zorder=0)
+    if show_grid:
+        ax.yaxis.grid(True, linestyle="-", linewidth=0.30, color="#F2F2F2", zorder=0)
     ax.set_axisbelow(True)
 
     for i, (arr, col) in enumerate(zip(clean_vals, cols)):
@@ -1968,6 +1977,7 @@ def plot_paired_slope(
     down_line_color: str = "#3B6EA5",
     ylabel: str = "",
     show_stat: bool = True,
+    show_grid: bool = False,
 ) -> Dict:
     """
     Paired Longitudinal Pre/Post Slope + Flanking Hollow Boxplot (colored by trajectory
@@ -1978,7 +1988,8 @@ def plot_paired_slope(
     mask = np.isfinite(a) & np.isfinite(b)
     a, b = a[mask], b[mask]
 
-    ax.yaxis.grid(True, linestyle="-", linewidth=0.30, color="#F2F2F2", zorder=0)
+    if show_grid:
+        ax.yaxis.grid(True, linestyle="-", linewidth=0.30, color="#F2F2F2", zorder=0)
     ax.set_axisbelow(True)
 
     # Paired connecting slope lines colored subtly by increase vs decrease
@@ -2430,6 +2441,7 @@ def plot_spatial_boundary_gradient(
     core_label: str = "Tumor core",
     stroma_label: str = "Stroma",
     direct_labels: bool = True,
+    show_grid: bool = False,
 ) -> None:
     """
     Signed Distance to Tumor–Stroma Invasive Margin Gradient Curve (10.4% of Tier-1 CNS spatial papers!):
@@ -2443,7 +2455,8 @@ def plot_spatial_boundary_gradient(
     def_pal = get_default_palette(len(names))
     col_map = colors or {nm: def_pal[i] for i, nm in enumerate(names)}
 
-    ax.yaxis.grid(True, linestyle="-", linewidth=0.30, color="#F0F0F0", zorder=0)
+    if show_grid:
+        ax.yaxis.grid(True, linestyle="-", linewidth=0.30, color="#F0F0F0", zorder=0)
     ax.set_axisbelow(True)
 
     # Soft backdrop distinguishing tumor core (x < 0) from stroma (x > 0)
@@ -2836,6 +2849,7 @@ def plot_spatial_ripley_curve(
     colors: Optional[Dict[str, str]] = None,
     xlabel: str = "Radius r (μm)",
     ylabel: str = "Besag's $L(r) - r$",
+    show_grid: bool = False,
 ) -> None:
     """
     2025–2026 Multi-Scale Spatial Point-Process Curve (Ripley's K / Besag's L(r) - r vs r):
@@ -2847,7 +2861,8 @@ def plot_spatial_ripley_curve(
     def_pal = get_default_palette(len(names))
     col_map = colors or {nm: def_pal[i] for i, nm in enumerate(names)}
 
-    ax.yaxis.grid(True, linestyle="-", linewidth=0.30, color="#F0F0F0", zorder=0)
+    if show_grid:
+        ax.yaxis.grid(True, linestyle="-", linewidth=0.30, color="#F0F0F0", zorder=0)
     ax.set_axisbelow(True)
     ax.axhline(0.0, color="#555555", linestyle="--", linewidth=0.45, zorder=1)
 
@@ -3052,6 +3067,7 @@ def plot_marker_dotplot(
     max_dot_size: float = 72.0,
     italic_genes: bool = True,
     auto_tilt: bool = True,
+    show_grid: bool = False,
 ):
     """
     CNS Grouped Marker DotPlot (26.8% of Tier-1 2025-2026 tumor papers!):
@@ -3071,7 +3087,8 @@ def plot_marker_dotplot(
     # Subtle background guide grid
     ax.set_xticks(np.arange(nc))
     ax.set_yticks(np.arange(nr))
-    ax.grid(True, color="#F2F2F2", linestyle="-", linewidth=0.30, zorder=0)
+    if show_grid:
+        ax.grid(True, color="#F2F2F2", linestyle="-", linewidth=0.30, zorder=0)
     ax.set_axisbelow(True)
 
     xs, ys, szs, cols = [], [], [], []
@@ -3127,6 +3144,7 @@ def plot_split_violin(
     colors: Tuple[str, str] = ("#3B6EA5", "#C84B4B"),
     ylabel: str = "Expression",
     auto_tilt: bool = True,
+    show_grid: bool = False,
 ) -> None:
     """
     Compact CNS Split-Violin Plot comparing 2 conditions across multiple single-cell clusters
@@ -3136,7 +3154,8 @@ def plot_split_violin(
 
     k = len(clusters)
     xs = np.arange(k, dtype=float)
-    ax.yaxis.grid(True, linestyle="-", linewidth=0.30, color="#F2F2F2", zorder=0)
+    if show_grid:
+        ax.yaxis.grid(True, linestyle="-", linewidth=0.30, color="#F2F2F2", zorder=0)
     ax.set_axisbelow(True)
 
     all_v = []
@@ -3193,6 +3212,7 @@ def plot_milo_beeswarm(
     ns_color: str = "#D4D4D4",
     xlabel: str = "log$_2$(fold change)",
     seed: int = 42,
+    show_grid: bool = False,
 ) -> None:
     """
     Milo Differential-Abundance Neighborhood Beeswarm (2024–2026 anti-pseudoreplication gold standard!):
@@ -3205,7 +3225,8 @@ def plot_milo_beeswarm(
     k = len(order)
     ys = np.arange(k, dtype=float)
 
-    ax.xaxis.grid(True, linestyle="-", linewidth=0.30, color="#F0F0F0", zorder=0)
+    if show_grid:
+        ax.xaxis.grid(True, linestyle="-", linewidth=0.30, color="#F0F0F0", zorder=0)
     ax.set_axisbelow(True)
     ax.axvline(0.0, color="#1A1A1A", linestyle="--", linewidth=0.45, zorder=1)
 
@@ -3666,6 +3687,7 @@ def plot_swimmer_plot(
     arm_palette: Optional[Dict[str, str]] = None,
     xlabel: str = "Treatment duration (months)",
     landmark_x: Optional[float] = None,
+    show_grid: bool = False,
 ) -> None:
     """
     Oncology Clinical Trial Swimmer Plot (2.9% of Tier-1 2025-2026 tumor papers, x1.68 growth!):
@@ -3682,7 +3704,8 @@ def plot_swimmer_plot(
     uniq_arms = list(dict.fromkeys(arm_list))
     pal = arm_palette or {a: c for a, c in zip(uniq_arms, get_default_palette(len(uniq_arms)))}
 
-    ax.xaxis.grid(True, linestyle="-", linewidth=0.30, color="#F0F0F0", zorder=0)
+    if show_grid:
+        ax.xaxis.grid(True, linestyle="-", linewidth=0.30, color="#F0F0F0", zorder=0)
     ax.set_axisbelow(True)
     if landmark_x is not None:
         ax.axvline(landmark_x, color="#777777", linestyle="--", linewidth=0.40, zorder=1)
@@ -3897,6 +3920,7 @@ def plot_shap_beeswarm(
     cmap: str = "rdbu_soft",
     xlabel: str = "SHAP value (impact on prediction)",
     seed: int = 42,
+    show_grid: bool = False,
 ):
     """
     ML Interpretability SHAP Summary Beeswarm (7.5% of Tier-1 2025-2026 papers, x1.97 growth!):
@@ -3913,7 +3937,8 @@ def plot_shap_beeswarm(
     cm = get_cns_cmap(cmap)
     norm = mcolors.Normalize(vmin=0.0, vmax=1.0)
 
-    ax.xaxis.grid(True, linestyle="-", linewidth=0.30, color="#F0F0F0", zorder=0)
+    if show_grid:
+        ax.xaxis.grid(True, linestyle="-", linewidth=0.30, color="#F0F0F0", zorder=0)
     ax.set_axisbelow(True)
     ax.axvline(0.0, color="#1A1A1A", linestyle="--", linewidth=0.45, zorder=1)
 

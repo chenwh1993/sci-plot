@@ -774,7 +774,7 @@ plot_lollipop_cns <- function(df,
                               accent_color = "#C84B4B",
                               ref_line = 0,
                               show_values = FALSE,
-                              preset = "cns_compact") {
+                              preset = "cns_compact", show_grid = FALSE) {
   d <- df
   d[[label_col]] <- factor(d[[label_col]], levels = d[[label_col]][order(d[[value_col]])])
   p <- ggplot(d, aes(x = .data[[label_col]], y = .data[[value_col]]))
@@ -813,8 +813,8 @@ plot_lollipop_cns <- function(df,
   }
   if (horizontal) p <- p + coord_flip(clip = "off")
   p + theme_cns(preset = preset) +
-    theme(panel.grid.major.x = if (horizontal) element_line(colour = "#EFEFEF", linewidth = pt_to_lwd(0.30)) else element_blank(),
-          panel.grid.major.y = if (!horizontal) element_line(colour = "#EFEFEF", linewidth = pt_to_lwd(0.30)) else element_blank())
+    theme(panel.grid.major.x = if (show_grid && horizontal) element_line(colour = "#EFEFEF", linewidth = pt_to_lwd(0.30)) else element_blank(),
+          panel.grid.major.y = if (show_grid && !horizontal) element_line(colour = "#EFEFEF", linewidth = pt_to_lwd(0.30)) else element_blank())
 }
 
 #' Bidirectional Diverging Pathway Enrichment with Opposite-Side Embedded Labels (Nature Medicine / Cancer Cell style)
@@ -824,7 +824,7 @@ plot_diverging_enrichment_cns <- function(df,
                                           up_color = "#C84B4B",
                                           down_color = "#3B6EA5",
                                           style = c("bar", "lollipop"),
-                                          preset = "cns_compact") {
+                                          preset = "cns_compact", show_grid = FALSE) {
   style <- match.arg(style)
   d <- df
   d <- d[order(d[[score_col]]), , drop = FALSE]
@@ -865,7 +865,7 @@ plot_diverging_enrichment_cns <- function(df,
       axis.line.y  = element_blank(),
       axis.ticks.y = element_blank(),
       axis.text.y  = element_blank(),
-      panel.grid.major.x = element_line(colour = "#EFEFEF", linewidth = pt_to_lwd(0.30))
+      panel.grid.major.x = if (show_grid) element_line(colour = "#EFEFEF", linewidth = pt_to_lwd(0.30)) else element_blank()
     )
   p
 }
@@ -876,7 +876,7 @@ plot_enhanced_bar_cns <- function(df,
                                   value_col,
                                   palette = CNS_DEFAULT_PALETTE,
                                   err_type = c("sd", "sem"),
-                                  preset = "cns_compact") {
+                                  preset = "cns_compact", show_grid = FALSE) {
   err_type <- match.arg(err_type)
   grps <- unique(as.character(df[[group_col]]))
   sum_df <- do.call(rbind, lapply(grps, function(g) {
@@ -903,7 +903,7 @@ plot_enhanced_bar_cns <- function(df,
     scale_x_discrete(expand = expansion(add = CNS_SPEC$bar_edge_add)) +
     labs(x = NULL) +
     theme_cns(preset = preset) +
-    theme(panel.grid.major.y = element_line(colour = "#EFEFEF", linewidth = pt_to_lwd(0.30)))
+    theme(panel.grid.major.y = if (show_grid) element_line(colour = "#EFEFEF", linewidth = pt_to_lwd(0.30)) else element_blank())
 }
 
 # ---------------------------------------------------------------------------
@@ -955,7 +955,7 @@ add_spatial_scalebar_r <- function(p, xlim, ylim, length_um = 500, units_per_um 
 plot_spatial_boundary_gradient_r <- function(df, dist_col = "distance_um", mean_col = "mean",
                                              ci_col = "ci", group_col = "lineage",
                                              palette = CNS_DEFAULT_PALETTE,
-                                             preset = "cns_compact") {
+                                             preset = "cns_compact", show_grid = FALSE) {
   p <- ggplot(df, aes(x = .data[[dist_col]], y = .data[[mean_col]],
                       colour = .data[[group_col]], fill = .data[[group_col]])) +
     annotate("rect", xmin = min(df[[dist_col]], na.rm = TRUE), xmax = 0,
@@ -969,7 +969,7 @@ plot_spatial_boundary_gradient_r <- function(df, dist_col = "distance_um", mean_
     scale_fill_manual(values = palette) +
     labs(x = "Distance to tumor boundary (\u03bcm)", y = "Relative abundance") +
     theme_cns(preset = preset) +
-    theme(panel.grid.major.y = element_line(colour = "#F0F0F0", linewidth = pt_to_lwd(0.30)))
+    theme(panel.grid.major.y = if (show_grid) element_line(colour = "#F0F0F0", linewidth = pt_to_lwd(0.30)) else element_blank())
   p
 }
 
@@ -1000,7 +1000,7 @@ plot_spatial_ripley_curve_r <- function(df, r_col = "r_um", val_col = "L_minus_r
                                         group_col = "group", ci_col = NULL,
                                         csr_lo_col = NULL, csr_hi_col = NULL,
                                         palette = CNS_DEFAULT_PALETTE,
-                                        preset = "cns_compact") {
+                                        preset = "cns_compact", show_grid = FALSE) {
   p <- ggplot(df, aes(x = .data[[r_col]], y = .data[[val_col]],
                       colour = .data[[group_col]], fill = .data[[group_col]])) +
     geom_hline(yintercept = 0, linetype = "dashed", linewidth = pt_to_lwd(0.45), colour = "#555555")
@@ -1018,7 +1018,7 @@ plot_spatial_ripley_curve_r <- function(df, r_col = "r_um", val_col = "L_minus_r
     scale_fill_manual(values = palette) +
     labs(x = "Radius r (\u03bcm)", y = expression("Besag's " * italic(L)(italic(r)) - italic(r))) +
     theme_cns(preset = preset) +
-    theme(panel.grid.major.y = element_line(colour = "#F0F0F0", linewidth = pt_to_lwd(0.30)))
+    theme(panel.grid.major.y = if (show_grid) element_line(colour = "#F0F0F0", linewidth = pt_to_lwd(0.30)) else element_blank())
 }
 
 # ---------------------------------------------------------------------------
@@ -1028,7 +1028,7 @@ plot_spatial_ripley_curve_r <- function(df, r_col = "r_um", val_col = "L_minus_r
 #' Grouped Marker DotPlot with Crisp 0.30 pt Dark Dot Rims & Smart Tilted Italic Gene Labels
 plot_marker_dotplot_r <- function(df, cluster_col = "cluster", gene_col = "gene",
                                   expr_col = "zscore", pct_col = "pct_exp",
-                                  vlim = c(-2, 2), preset = "cns_compact") {
+                                  vlim = c(-2, 2), preset = "cns_compact", show_grid = FALSE) {
   d <- df
   d$.z <- pmax(vlim[1], pmin(vlim[2], d[[expr_col]]))
   ggplot(d, aes(x = .data[[gene_col]], y = .data[[cluster_col]])) +
@@ -1041,7 +1041,7 @@ plot_marker_dotplot_r <- function(df, cluster_col = "cluster", gene_col = "gene"
     smart_x_labels(unique(d[[gene_col]]), axis_width_mm = 65, angle = 45) +
     theme(
       axis.text.x = element_text(face = "italic", angle = 45, hjust = 1, vjust = 1),
-      panel.grid.major = element_line(colour = "#F2F2F2", linewidth = pt_to_lwd(0.30))
+      panel.grid.major = if (show_grid) element_line(colour = "#F2F2F2", linewidth = pt_to_lwd(0.30)) else element_blank()
     )
 }
 
@@ -1067,7 +1067,7 @@ plot_cox_forest_r <- function(df, var_col = "variable", hr_col = "hr",
 
 #' Oncology Clinical Trial Swimmer Plot (Duration Bars + CR/PR/PD/Ongoing Markers)
 plot_swimmer_r <- function(df, id_col = "patient", dur_col = "months", arm_col = "arm",
-                           palette = CNS_DEFAULT_PALETTE, preset = "cns_compact") {
+                           palette = CNS_DEFAULT_PALETTE, preset = "cns_compact", show_grid = FALSE) {
   d <- df
   d[[id_col]] <- factor(d[[id_col]], levels = d[[id_col]][order(d[[dur_col]])])
   ggplot(d, aes(x = .data[[id_col]], y = .data[[dur_col]], fill = .data[[arm_col]])) +
@@ -1077,7 +1077,7 @@ plot_swimmer_r <- function(df, id_col = "patient", dur_col = "months", arm_col =
     coord_flip(clip = "off") +
     labs(x = NULL, y = "Treatment duration (months)") +
     theme_cns(preset = preset, legend_pos = "bottom") +
-    theme(panel.grid.major.x = element_line(colour = "#F0F0F0", linewidth = pt_to_lwd(0.30)))
+    theme(panel.grid.major.x = if (show_grid) element_line(colour = "#F0F0F0", linewidth = pt_to_lwd(0.30)) else element_blank())
 }
 
 load_manuscript_palette <- function(json_path) {

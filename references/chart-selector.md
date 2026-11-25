@@ -34,7 +34,7 @@ When sticking with a conventional chart (Track A), apply these 4 high-craft upgr
 
 1. **Upgrade Plain Bar Plots (`plot_enhanced_bar` / `plot_diverging_enrichment`)**:
    - **Never** draw thick opaque rectangles with zero point overlay and blank flat background.
-   - Use **`outlined_pastel`** (`alpha = 0.28` tinted fill + `0.85 pt` crisp same-hue outline) + **white-rimmed jittered replicate dots** (`edgecolor="white", lw=0.3 pt`) + subtle `#EFEFEF` (`0.30 pt`) horizontal guide gridlines + zero bottom gap at `y = 0`.
+   - Use **`outlined_pastel`** (`alpha = 0.28` tinted fill + `0.85 pt` crisp same-hue outline) + **white-rimmed jittered replicate dots** (`edgecolor="white", lw=0.3 pt`) + **clean gridless pure-white L-axis canvas** (no background coordinate mesh; zero bottom gap at `y = 0`).
    - For bidirectional pathway/GSEA bars, **embed pathway labels on the empty opposite side of `x = 0`** (`plot_diverging_enrichment`) — cuts 40% wasted margin and immediately looks editorial!
    - Or swap bars outright for a **Lollipop plot (`plot_lollipop`)** encoding a 2nd metric (gene count or `−log₁₀(FDR)`) in terminal circle size/color!
 2. **Upgrade Plain Boxplots (`plot_raincloud` / `plot_paired_slope`)**:
