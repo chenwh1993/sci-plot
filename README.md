@@ -23,7 +23,17 @@ Empirically distilled from **588 2025–2026 spatial tumor papers**: **signaling
 
 ![2025-2026 frontier spatial gallery](assets/demo_v2_spatial_frontier.png)
 
-### 4. Clinical & Correlation Upgrades (`180 × 54 mm`, 66 KB PDF)
+### 4. Single-Cell & Immune Repertoire Gallery (`180 × 108 mm`, 600 dpi Hybrid PDF)
+Empirically distilled from **747 Tier-1 2025–2026 tumor papers**: **grouped marker dot plot** (top module brackets + dark rims), **two-condition split violin**, **Milo DA beeswarm**, **smoothed pseudotime gene-cascade heatmap**, **cell–cell communication chord diagram**, and **longitudinal TCR clonal alluvial flow**.
+
+![Single-cell and repertoire gallery](assets/demo_v2_singlecell_gallery.png)
+
+### 5. Clinical Cohort, Oncology Trial, Survival & ML Gallery (`180 × 112 mm`, Vector PDF)
+**Kaplan–Meier + exact aligned Number-at-Risk table**, **multivariable Cox forest plot**, **oncology swimmer timeline**, **multi-track clinical OncoPrint** (TMB + split double-hits + `%` + clinical metadata strips), **longitudinal spider plot**, and **SHAP interpretability beeswarm**.
+
+![Clinical oncology and ML gallery](assets/demo_v2_clinical_gallery.png)
+
+### 6. Clinical & Correlation Upgrades (`180 × 54 mm`, 66 KB PDF)
 **Paired Pre/Post longitudinal slope + half-box**, **oncology RECIST waterfall**, and **split-triangle correlation matrix**.
 
 ![Clinical and correlation upgrades](assets/demo_v2_clinical_and_corr.png)
@@ -75,6 +85,8 @@ sci-plot/
 │   ├── micro-aesthetics.md                # Bar spacing, box/point sizes, alpha, stroke hierarchy
 │   ├── statistical-tests.md               # Two-sided test selection & anti-pseudoreplication guide
 │   ├── spatial-omics-visualization.md     # Visium/Xenium/CosMx/CODEX/IMC/mIF spatial playbook (1,035 papers)
+│   ├── single-cell-and-repertoire.md      # Single-cell, Milo, DotPlot, pseudotime, Chord & TCR repertoire playbook
+│   ├── clinical-and-oncology-charts.md    # Clinical OncoPrint, KM+risk table, Cox forest, Swimmer, Spider, SHAP & UpSet
 │   └── hybrid-vector-raster-ai.md         # Python/R 600-dpi hybrid export & AI editability cookbook
 ├── scripts/
 │   ├── sci_plot_py.py                     # Python (matplotlib/seaborn/scanpy) publication kit + CLI

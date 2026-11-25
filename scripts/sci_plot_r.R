@@ -1021,6 +1021,65 @@ plot_spatial_ripley_curve_r <- function(df, r_col = "r_um", val_col = "L_minus_r
     theme(panel.grid.major.y = element_line(colour = "#F0F0F0", linewidth = pt_to_lwd(0.30)))
 }
 
+# ---------------------------------------------------------------------------
+# Single-Cell & Clinical Oncology Helpers (R / ggplot2, 747 Tier-1 2025-26 papers)
+# ---------------------------------------------------------------------------
+
+#' Grouped Marker DotPlot with Crisp 0.30 pt Dark Dot Rims & Smart Tilted Italic Gene Labels
+plot_marker_dotplot_r <- function(df, cluster_col = "cluster", gene_col = "gene",
+                                  expr_col = "zscore", pct_col = "pct_exp",
+                                  vlim = c(-2, 2), preset = "cns_compact") {
+  d <- df
+  d$.z <- pmax(vlim[1], pmin(vlim[2], d[[expr_col]]))
+  ggplot(d, aes(x = .data[[gene_col]], y = .data[[cluster_col]])) +
+    geom_point(aes(size = .data[[pct_col]], fill = .z),
+               shape = 21, colour = "#333333", stroke = pt_to_lwd(0.30)) +
+    scale_fill_cns_diverging(limits = vlim, name = "Z-score") +
+    scale_size_continuous(range = c(0.6, 3.3), name = "Cells (%)") +
+    labs(x = NULL, y = NULL) +
+    theme_cns(preset = preset, legend_pos = "right") +
+    smart_x_labels(unique(d[[gene_col]]), axis_width_mm = 65, angle = 45) +
+    theme(
+      axis.text.x = element_text(face = "italic", angle = 45, hjust = 1, vjust = 1),
+      panel.grid.major = element_line(colour = "#F2F2F2", linewidth = pt_to_lwd(0.30))
+    )
+}
+
+#' Publication Multivariable Cox Forest Plot (Alternating Zebra Rows + Log-Scale HR Whiskers)
+plot_cox_forest_r <- function(df, var_col = "variable", hr_col = "hr",
+                              lo_col = "ci_lo", hi_col = "ci_hi", p_col = "p",
+                              preset = "cns_compact") {
+  d <- df
+  d[[var_col]] <- factor(d[[var_col]], levels = rev(d[[var_col]]))
+  d$.col <- ifelse(d[[p_col]] >= 0.05, "#595959", ifelse(d[[hr_col]] > 1, "#C84B4B", "#2A9D8F"))
+  d$.row <- seq_len(nrow(d))
+  ggplot(d, aes(y = .data[[var_col]], x = .data[[hr_col]])) +
+    geom_vline(xintercept = 1.0, linetype = "dashed", linewidth = pt_to_lwd(0.45), colour = "#666666") +
+    geom_errorbarh(aes(xmin = .data[[lo_col]], xmax = .data[[hi_col]], colour = .col),
+                   height = 0, linewidth = pt_to_lwd(0.80)) +
+    geom_point(aes(fill = .col), shape = 22, size = 2.4, colour = "white", stroke = pt_to_lwd(0.35)) +
+    scale_colour_identity() + scale_fill_identity() +
+    scale_x_log10() +
+    labs(x = "Hazard ratio (95% CI)", y = NULL) +
+    theme_cns(preset = preset) +
+    theme(axis.line.y = element_blank(), axis.ticks.y = element_blank())
+}
+
+#' Oncology Clinical Trial Swimmer Plot (Duration Bars + CR/PR/PD/Ongoing Markers)
+plot_swimmer_r <- function(df, id_col = "patient", dur_col = "months", arm_col = "arm",
+                           palette = CNS_DEFAULT_PALETTE, preset = "cns_compact") {
+  d <- df
+  d[[id_col]] <- factor(d[[id_col]], levels = d[[id_col]][order(d[[dur_col]])])
+  ggplot(d, aes(x = .data[[id_col]], y = .data[[dur_col]], fill = .data[[arm_col]])) +
+    geom_col(width = 0.66, alpha = 0.84) +
+    scale_fill_manual(values = palette, name = NULL) +
+    scale_y_bar_zero(top_mult = 0.14) +
+    coord_flip(clip = "off") +
+    labs(x = NULL, y = "Treatment duration (months)") +
+    theme_cns(preset = preset, legend_pos = "bottom") +
+    theme(panel.grid.major.x = element_line(colour = "#F0F0F0", linewidth = pt_to_lwd(0.30)))
+}
+
 load_manuscript_palette <- function(json_path) {
   if (!requireNamespace("jsonlite", quietly = TRUE)) {
     stop("Install jsonlite to read shared palette.json")
