@@ -95,6 +95,12 @@ Distilled empirically from **5,000+ high-IF original research articles** (deep v
    - **NEVER shrink real pathology, radiology (MRI/CT), mIF/IHC, or gross-specimen photos into tiny `40 × 35 mm` postage stamps!** When a Main Figure showcases real visual evidence, reserve a dedicated **Hero Visual Zone occupying `35–55%` of the plate area** — either a **Full-Width Visual Hero Band (`174–180 × 65–95 mm`)** or a **`2/3`-Width Hero Block (`115–122 × 65–90 mm`)** paired with `1/3`-width stacked quantitative panels (`create_visual_hero_layout()` / `compose_visual_hero_r()`).
    - Embed actual high-DPI images cleanly via `plot_real_image_panel()` (locking `1:1` aspect ratio + crisp vector ROI box + true physical scale bar), OR reserve an exact 1:1 mm Illustrator drop-in frame via `add_visual_placeholder_frame()` / `plot_visual_placeholder_r()` when raw clinical MRI/WSI slides will be dropped directly in Illustrator!
 
+10. **Anti-Sparse Plate Density Calibration, Cross-Journal Format Purity & In-Figure Text Hygiene**:
+    - Consult [journal-figure-standards.md](./references/journal-figure-standards.md) and [sizing-and-aspect-ratios.md](./references/sizing-and-aspect-ratios.md) §7 before assembling full-page plates:
+    - **Cross-Journal Artwork Purity**: Strictly match target journal canvas width (`Nature/NCB 180 mm` lowercase `a, b` + UK spelling vs `Cell/Cancer Cell 174 mm` uppercase `A, B` + US spelling vs `Science 184 mm` uppercase `10 pt A, B`).
+    - **Anti-Sparse / Visual-Density Targets**: Aim for **`52–72%` pure-white pixels** on multi-modal Main Figs (`≤ 75%` on statistical Main Figs; flag **`> 76%`** Main / **`> 80%`** ED), **`≥ 75%` page height (`165–218 mm`)**, and **`< 10 mm`** internal vertical white gaps. Ensure **every Main Figure** carries ≥ 1 real visual anchor OR high-density matrix/OncoPrint/KM+Risk-Table (never an `80%`-white wall of bare scatter/bar plots!).
+    - **Anti-Bare-Plot & Anti-Half-Empty ED Consolidation**: Every KM plot MUST include **95% CI ribbon + aligned `Number at risk` table + HR (95% CI)**; never scatter `4`-panel half-height (`110–130 mm`) ED plates when two paired ED plates can merge into one dense `7–8` panel full-page plate; NEVER render Study Designs or final Working Models as plain matplotlib text-boxes + arrows (use biological cell/organ vector art); audit 100% of extracted real imaging files so none are orphaned; and purge all AI-tell/notebook-code labels (`audit`, `crosswalk`, `parsimonious`, `habitat`, `OOF`, `Quarantined`, `phase cliff`, `Adversarial`, cluster IDs) from in-figure titles/axes!
+
 ---
 
 ## Standard Workflow (Follow Step by Step)
@@ -136,4 +142,5 @@ Before finishing:
    - `ai_single_line_text_pass == True` (`fragmented_td_blocks == 0` AND `kerning_split_tj_blocks == 0`, guaranteeing zero broken multi-element labels when opened in Illustrator)
    - Embedded high-DPI raster image present ONLY when dense layer (`> 2,000` pts or `> 2,500` cells) was rasterized
    - Reasonable PDF file size (typically `< 2 MB` even for 100k-cell UMAPs)
-3. Visually inspect the rendered PNG preview using `read_file` to verify zero overlapping text, clean whitespace, legible ticks, and balanced aspect ratio. Fix any crowding before delivering.
+3. For assembled full-page Main & Extended Data/Supplementary plates, run `python scripts/sci_plot_py.py --audit-plate <plate_or_dir> --journal <target>` (optionally `--assets-dir <real_visuals_dir>`) to catch sparse `>76–80%`-white sheets, half-empty `<65%`-height ED plates, `≥10 mm` internal white voids, in-figure AI-tell/notebook-ID text leaks, and orphaned real visual assets.
+4. Visually inspect the rendered PNG preview using `read_file` to verify zero overlapping text, clean whitespace, legible ticks, and balanced aspect ratio. Fix any crowding or sparsity before delivering.

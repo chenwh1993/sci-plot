@@ -23,6 +23,7 @@ import argparse
 import json
 import os
 import re
+from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
 import matplotlib as mpl
@@ -4319,11 +4320,176 @@ def verify_ai_pdf(pdf_path: str) -> Dict:
     }
 
 
+JOURNAL_PLATE_CAPS_MM = {
+    "nature": (180.0, 220.0),
+    "nature_sister": (180.0, 220.0),
+    "nat_med": (180.0, 215.0),
+    "cell": (174.0, 215.0),
+    "cancer_cell": (174.0, 215.0),
+    "science": (184.0, 218.0),
+    "aacr": (178.0, 210.0),
+}
+
+IN_FIGURE_BANNED_TERMS_RE = re.compile(
+    r"\b(audit(?:ed)?|crosswalk|parsimonious|habitats?|out-of-fold|\bOOF\b|quarantined|phase cliff|adversarial|triage cascade|[a-z]\d{2}_[A-Za-z0-9_]+|[A-Z]\d+_[A-Z]\d+_[A-Za-z]+|(?:Primary|Temporal|Cohort|Val|Discovery)\d{2,3}|CNA(?:Pure|Gate))\b",
+    re.I,
+)
+
+
+def audit_plate_density(
+    target_path: str,
+    journal: str = "nature_sister",
+    assets_dir: Optional[str] = None,
+) -> Dict:
+    """
+    Audit assembled publication plate(s) (PDF, PNG, or directory of plates) for:
+      1. Physical mm canvas & page-height utilization (detect half-empty <65% ED/Supp plates)
+      2. Pure-white pixel ratio (RGB > 246; flag >76% Main / >80% ED sparse plates)
+      3. Dead internal horizontal white bands (>= 10 mm empty vertical gaps inside content)
+      4. In-figure AI-tell & internal notebook/code text leaks (scanned from PDF live text)
+      5. Twin half-empty ED consolidation suggestions & orphaned real-visual asset checks
+    """
+    from PIL import Image
+
+    w_cap, h_cap = JOURNAL_PLATE_CAPS_MM.get(journal, (180.0, 220.0))
+    p = Path(target_path)
+    if p.is_dir():
+        pdfs = sorted(p.glob("*.pdf"))
+        pngs = sorted(p.glob("*.png"))
+        # Prefer PDFs (gives live text + exact mm + rendered pixels); pair PNGs if no PDFs
+        files = pdfs if pdfs else pngs
+    else:
+        files = [p]
+
+    results = []
+    half_empty_eds = []
+    total_rasters = 0
+
+    for fp in files:
+        ext = fp.suffix.lower()
+        is_ed = bool(re.search(r"(?:^|[_\-])(?:edf|ed_?fig|ext|supp|figs?\d*s|s\d+)", fp.stem, re.I))
+        tier = "ED/Supp" if is_ed else "Main"
+        text_leaks = []
+        n_rasters = 0
+
+        if ext == ".pdf":
+            import fitz
+
+            doc = fitz.open(str(fp))
+            page = doc[0]
+            w_mm = round(page.rect.width * MM_PER_INCH / 72.0, 1)
+            h_mm = round(page.rect.height * MM_PER_INCH / 72.0, 1)
+            full_txt = page.get_text("text")
+            text_leaks = sorted({m.group(0) for m in IN_FIGURE_BANNED_TERMS_RE.finditer(full_txt)})
+            n_rasters = len(page.get_image_info(xrefs=False))
+            pix = page.get_pixmap(dpi=120, alpha=False)
+            arr = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, 3)
+            doc.close()
+        else:
+            with Image.open(fp) as im:
+                rgb = im.convert("RGB")
+                dpi = im.info.get("dpi", (300, 300))
+                dx = float(dpi[0]) if dpi and dpi[0] else 300.0
+                dy = float(dpi[1]) if dpi and dpi[1] else 300.0
+                w_mm = round(rgb.width / dx * MM_PER_INCH, 1)
+                h_mm = round(rgb.height / dy * MM_PER_INCH, 1)
+                # Downsample to ~120 dpi equivalent for fast, consistent band analysis
+                scale = min(1.0, 900.0 / max(1, rgb.width))
+                if scale < 1.0:
+                    rgb = rgb.resize((max(1, int(rgb.width * scale)), max(1, int(rgb.height * scale))))
+                arr = np.asarray(rgb, dtype=np.uint8)
+
+        total_rasters += n_rasters
+        # Pure-white pixel ratio (RGB > 246)
+        non_white = np.any(arr <= 246, axis=2)
+        white_pct = round(100.0 * (1.0 - float(non_white.mean())), 1)
+        h_util_pct = round(100.0 * h_mm / max(1.0, h_cap), 1)
+
+        # Detect dead internal horizontal white voids >= 10 mm between first and last inked rows
+        row_ink = non_white.mean(axis=1)
+        inked_rows = np.where(row_ink >= 0.005)[0]
+        max_void_mm = 0.0
+        if len(inked_rows) >= 2:
+            r0, r1 = int(inked_rows[0]), int(inked_rows[-1])
+            empty_inner = row_ink[r0:r1 + 1] < 0.004
+            mm_per_row = h_mm / max(1, arr.shape[0])
+            run = 0
+            best_run = 0
+            for flag in empty_inner:
+                if flag:
+                    run += 1
+                    if run > best_run:
+                        best_run = run
+                else:
+                    run = 0
+            max_void_mm = round(best_run * mm_per_row, 1)
+
+        warnings = []
+        w_thresh = 80.0 if is_ed else 76.0
+        if white_pct > w_thresh:
+            warnings.append(f"SPARSE ({white_pct}% white > {w_thresh:.0f}% target; add visual/matrix anchor or tighten bare charts)")
+        if is_ed and h_util_pct < 65.0:
+            warnings.append(f"HALF-EMPTY ED ({h_mm}mm = {h_util_pct}% of {h_cap:.0f}mm; merge twin sparse ED plates into 1 full-height 6-8 panel plate)")
+            half_empty_eds.append(fp.name)
+        elif (not is_ed) and h_util_pct < 72.0:
+            warnings.append(f"UNDERFILLED MAIN ({h_mm}mm = {h_util_pct}% of {h_cap:.0f}mm)")
+        if h_mm > h_cap + 4.0:
+            warnings.append(f"HEIGHT OVERFLOW ({h_mm}mm > {h_cap:.0f}mm {journal} cap)")
+        if max_void_mm >= 10.0:
+            warnings.append(f"INTERNAL WHITE VOID ({max_void_mm}mm empty band >= 10mm; tighten header/legend/image spacing)")
+        if text_leaks:
+            warnings.append(f"IN-FIGURE AI/JARGON TEXT ({len(text_leaks)}): {text_leaks[:8]}")
+
+        results.append({
+            "file": fp.name,
+            "tier": tier,
+            "width_mm": w_mm,
+            "height_mm": h_mm,
+            "height_util_pct": h_util_pct,
+            "white_pct": white_pct,
+            "max_internal_void_mm": max_void_mm,
+            "raster_layers": n_rasters,
+            "text_leaks": text_leaks,
+            "warnings": warnings,
+            "status": "OK" if not warnings else "WARN",
+        })
+
+    global_notes = []
+    if len(half_empty_eds) >= 2:
+        global_notes.append(
+            f"CONSOLIDATE HALF-EMPTY ED PLATES: {len(half_empty_eds)} ED plates ({half_empty_eds}) use <65% page height; merge thematically related 4-panel ED plates into full-height 7-8 panel plates."
+        )
+    asset_summary = None
+    if assets_dir and Path(assets_dir).is_dir():
+        asset_files = sorted(
+            f.name for f in Path(assets_dir).iterdir()
+            if f.is_file() and f.suffix.lower() in (".png", ".jpg", ".jpeg", ".tif", ".tiff")
+        )
+        asset_summary = {"n_assets_on_disk": len(asset_files), "sample_assets": asset_files[:12]}
+        if asset_files:
+            global_notes.append(
+                f"REAL-VISUAL ASSET GATE: {len(asset_files)} visual asset file(s) found in '{Path(assets_dir).name}' vs {total_rasters} embedded raster layer(s) across PDFs — verify 0 microscopy/MRI/IF images were accidentally dropped!"
+            )
+
+    return {
+        "journal": journal,
+        "canvas_cap_mm": [w_cap, h_cap],
+        "n_plates_audited": len(results),
+        "n_warn_plates": sum(1 for r in results if r["warnings"]),
+        "plates": results,
+        "global_recommendations": global_notes,
+        "assets_check": asset_summary,
+    }
+
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="sci_plot_py CLI: coalesce fragmented PDF/SVG text runs & verify AI editability")
+    parser = argparse.ArgumentParser(description="sci_plot_py CLI: coalesce fragmented PDF/SVG text runs, verify AI editability & audit plate visual density")
     parser.add_argument("--fix-pdf", type=str, help="Path to PDF to coalesce into single-line Illustrator text")
     parser.add_argument("--fix-svg", type=str, help="Path to SVG to coalesce mathtext into semantic single <text> nodes")
     parser.add_argument("--verify", type=str, help="Path to PDF to audit without modifying")
+    parser.add_argument("--audit-plate", type=str, help="Path to assembled PDF/PNG plate or folder of plates to audit visual density, voids & in-figure text hygiene")
+    parser.add_argument("--journal", type=str, default="nature_sister", choices=list(JOURNAL_PLATE_CAPS_MM.keys()), help="Target journal canvas standard for --audit-plate")
+    parser.add_argument("--assets-dir", type=str, default=None, help="Optional folder of real imaging/microscopy assets to verify zero orphaned visuals")
     args = parser.parse_args()
     if args.fix_pdf:
         cstats = coalesce_pdf_text_runs(args.fix_pdf)
@@ -4334,3 +4500,13 @@ if __name__ == "__main__":
         print("SVG coalesce result:", json.dumps(sstats, indent=2))
     if args.verify and not args.fix_pdf:
         print("Audit:", json.dumps(verify_ai_pdf(args.verify), indent=2))
+    if args.audit_plate:
+        rep = audit_plate_density(args.audit_plate, journal=args.journal, assets_dir=args.assets_dir)
+        print(f"=== sci-plot Visual-Density & Anti-Sparse Plate Audit | Journal: {rep['journal']} ({rep['canvas_cap_mm'][0]:.0f}x{rep['canvas_cap_mm'][1]:.0f} mm) ===")
+        for r in rep["plates"]:
+            print(f"  [{r['status']:4s}] {r['file']:30s} | {r['tier']:7s} | {r['width_mm']:5.1f}x{r['height_mm']:5.1f}mm ({r['height_util_pct']:5.1f}%H) | white={r['white_pct']:5.1f}% | void={r['max_internal_void_mm']:4.1f}mm")
+            for w in r["warnings"]:
+                print(f"         -> {w}")
+        for note in rep["global_recommendations"]:
+            print(f"\n  [GLOBAL] {note}")
+        print(f"\n--- SUMMARY: {rep['n_plates_audited']} plate(s) audited, {rep['n_warn_plates']} with density/hygiene warning(s) ---")

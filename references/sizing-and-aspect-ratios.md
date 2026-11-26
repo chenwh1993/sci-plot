@@ -111,3 +111,24 @@ Use one of these **3 CNS Hero Grid Blueprints** (`create_visual_hero_layout()` i
    - Row 1 (`180 × 64 mm`): **`a`** Gross excised tumors with ruler / IVIS bioluminescence (`115 × 64 mm`) + **`b`** Tumor growth curve (`60 × 64 mm`).
    - Row 2 (`180 × 68 mm`): **`c`** Representative IHC/mIF of Control vs Treated (`115 × 68 mm`) + **`d`** Quantification boxplot (`60 × 68 mm`).
    - Row 3 (`180 × 60 mm`): **`e, f, g`** Flow/immune infiltration + survival curves.
+
+---
+
+## 7. Anti-Sparse Plate Calibration, High-Substance Density & Anti-Half-Empty ED Rules
+
+Crowded plates look unreadable, **but overly sparse plates (`> 76%` pure white or half-empty `4`-panel Extended Data plates) look thin and less substantial than real flagship CNS figures.** Balance BOTH bounds (full details in [journal-figure-standards.md](./journal-figure-standards.md)):
+
+| Density / Layout Metric | Multi-Modal Main Fig Target | Pure Stat/Clinical Main Fig | Extended Data / Supp Fig Target | Automated Red Flag (`--audit-plate`) |
+| :--- | :---: | :---: | :---: | :--- |
+| **Pure-White Pixel Ratio (`RGB > 246`)** | **`52–72%`** | **`≤ 75%`** | **`≤ 78%`** | **`> 76%`** (Main) / **`> 80%`** (ED/Supp) |
+| **Page Height Utilization (`H / H_max`)** | **`82–98%`** (`180–218 mm`) | **`82–98%`** | **`75–98%`** (`165–215 mm`) | **`< 65%`** (half-empty plate!) |
+| **Panels per Extended Data / Supp Plate** | `8–10` (Main) | `8–10` (Main) | **`6–8` panels** | **`≤ 4` panels** + `< 65%` height → **merge twin ED plates!** |
+| **Internal Horizontal White Void** | **`< 8 mm`** | **`< 8 mm`** | **`< 8 mm`** | **`≥ 10 mm`** empty band between legend/title & image! |
+| **Visual / High-Density Anchor per Main Fig** | **≥ 1 real image Hero** | **≥ 1 rich matrix/OncoPrint/KM+Risk** | Paired visual/QC proof | `0` real visuals AND `0` complex matrices (`all scatter/bar`) |
+
+### Five Quick Fixes When a Plate Looks Too Empty or "PPT-Like"
+1. **Upgrade Bare Charts**: Always add **95% CI bands + aligned `Number at risk` table + `HR (95% CI)`** to every KM survival curve (`plot_km_survival`); never stretch a 3–4 bar univariate chart across `≥ 58 mm`; consolidate `≥ 3` tiny scatter plots into faceted 2D-contour strips or a correlation/forest summary.
+2. **Promote Buried Real Visuals & Audit Unused Assets**: Check `100%` of extracted microscopy / MRI / H&E / spatial ROI files against assembled plates so zero real images are accidentally dropped or buried in ED while a Main Fig sits `80%` white.
+3. **Merge Twin Half-Empty `4`-Panel ED Plates**: Combine two thematically related `4`-panel (`115–125 mm`, `83–90%` white) ED plates into ONE full-height `7–8` panel plate (`185–215 mm`), freeing slots for single-channel mIF splits, antibody controls, mouse toxicity/organ H&E, or uncropped blots.
+4. **Ban Plain Code Text-Box Schematics**: Never render Study Designs (`Fig. 1a`) or Final Working Models as matplotlib rounded rectangles + straight arrows — draw biological cell/organ/receptor illustrations in Illustrator / BioRender (or reserve clean vector frames with `add_visual_placeholder_frame()`).
+5. **Purge In-Figure AI / Notebook Labels**: Never leave `audit`, `crosswalk`, `parsimonious`, `habitat`, `OOF`, `Quarantined`, `phase cliff`, `Adversarial`, or pipeline cluster IDs (`c02_Fib_*`) inside plot titles or axis labels.

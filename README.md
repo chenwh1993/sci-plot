@@ -79,7 +79,8 @@ sci-plot/
 ├── README.md
 ├── references/
 │   ├── chart-selector.md                  # Data-to-chart decision matrix
-│   ├── sizing-and-aspect-ratios.md        # Journal grids, mm dimensions, W:H ratios
+│   ├── sizing-and-aspect-ratios.md        # Journal grids, mm dimensions, W:H ratios, visual Hero zones & anti-sparse rules
+│   ├── journal-figure-standards.md        # Cross-journal artwork matrix (Nature/NCB/Nat Med/Cell/Science/AACR) & 6 Anti-Sparse Density Laws
 │   ├── color-architecture.md              # Single-figure & whole-manuscript palettes
 │   ├── axis-labels-and-annotations.md     # Concise CNS axis-label copywriting dictionary
 │   ├── micro-aesthetics.md                # Bar spacing, box/point sizes, alpha, stroke hierarchy
