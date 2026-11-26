@@ -1,6 +1,6 @@
 # sci-plot
 
-An empirically distilled **Agent Skill** for generating **publication-ready scientific figures** (*Nature*, *Cell*, *Science*, *Nature Medicine*, *Cancer Cell* standard) in **Python** (`matplotlib` / `seaborn` / `scanpy`) and **R** (`ggplot2` / `ggrastr` / `ComplexHeatmap`), ready for 1:1 millimeter assembly in **Adobe Illustrator**.
+An empirically distilled **Agent Skill** for generating **publication-ready scientific figures** (*Nature*, *Cell*, *Science*, *Nature Medicine*, *Cancer Cell* standard) programmatically — **prioritizing R** (`ggplot2` / `ggrastr` / `ComplexHeatmap` / `patchwork`) whenever available or data-native, with **Python** (`matplotlib` / `seaborn` / `scanpy`) for Python-native data (`.h5ad` / `SpatialData` / WSI) or when R is unavailable — ready for 1:1 millimeter assembly in **Adobe Illustrator**. **Strictly prohibits direct LLM/diffusion image generation** for any data chart, multi-panel plate assembly, experimental image, or biological schematic.
 
 Distilled quantitatively from **5,000+ high-impact original research articles** (deep vector/color/typography audit of 167 Tier-1 CNS papers + large-scale chart-choice audit of **4,968 post-2020 tumor single-cell/spatial/multi-omics papers** covering 38,306 captions and 141,092 subpanels + vector label-tilt measurement of 504 categorical x-axes across 294 Tier-1 PDFs) and 172 chart recipes.
 
@@ -123,7 +123,14 @@ Keep the cloned folder anywhere (e.g. `D:/skills/sci-plot`) and register its par
 
 ### Quick Code Usage
 
-**Python**
+**R (Preferred Default when available or data-native: `.rds`, `.csv`, `.tsv`, Seurat, clinical/omics tables)**
+```r
+source("scripts/sci_plot_r.R")              # Activates default CNS palette + theme_cns()
+p <- plot_atlas_umap_composite(umap_df, major_colors = pal_maj, sub_colors = pal_sub)
+save_ai_pdf(p, "out/fig1e_atlas", width_mm = 160, height_mm = 95)
+```
+
+**Python (For Python-native `.h5ad` / `SpatialData` / WSI / PyTorch data, or when R is unavailable)**
 ```python
 import sci_plot_py as sp
 
@@ -133,13 +140,6 @@ fig = sp.new_cns_figure(width_mm=56, height_mm=44)
 # ... plot with rasterized=True on dense scatter/heatmap layers ...
 sp.save_ai_figure(fig, "out/fig1a", raster_dpi=600, coalesce_text=True)
 print(sp.verify_ai_pdf("out/fig1a.pdf"))
-```
-
-**R**
-```r
-source("scripts/sci_plot_r.R")              # Activates default CNS palette + theme_cns()
-p <- plot_atlas_umap_composite(umap_df, major_colors = pal_maj, sub_colors = pal_sub)
-save_ai_pdf(p, "out/fig1e_atlas", width_mm = 160, height_mm = 95)
 ```
 
 **Adobe Illustrator (Optional 1-Click Subscript/Multi-Style Merger)**

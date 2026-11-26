@@ -2,12 +2,12 @@
 name: sci-plot
 description: >-
   Generate publication-grade scientific figures (Nature, Cell, Science, Nature Medicine,
-  Cancer Cell standard) in Python (matplotlib/seaborn/scanpy) or R (ggplot2/ggrastr/ComplexHeatmap).
-  Use this skill whenever the user asks to plot biological, biomedical, clinical, single-cell,
-  spatial, omics, or statistical data; choose an appropriate chart type; design a color palette
-  for a figure or entire manuscript; export Adobe Illustrator-ready 1:1 millimeter vector PDF/SVG
-  with editable Arial typography; or produce hybrid vector+raster figures for high-density data
-  (UMAP, volcano plots, large heatmaps).
+  Cancer Cell standard) programmatically — prioritizing R (ggplot2/ggrastr/ComplexHeatmap/patchwork)
+  when available or data-native, with Python (matplotlib/seaborn/scanpy) for Python-native data
+  (.h5ad/SpatialData/PyTorch/WSI) or when R is unavailable. Strictly prohibits direct LLM/diffusion
+  image generation for ANY plot, plate assembly, experimental image, or schematic. Use whenever
+  plotting biological, biomedical, clinical, single-cell, spatial, omics, or statistical data;
+  choosing chart types or palettes; or exporting Adobe Illustrator-ready 1:1 mm vector/hybrid PDF/SVG.
 ---
 
 # Scientific Publication Plotting (`sci-plot`)
@@ -15,6 +15,17 @@ description: >-
 Distilled empirically from **5,000+ high-IF original research articles** (deep vector/color/typography audit of 167 Tier-1 CNS papers + large-scale chart-selection audit of **4,968 post-2020 tumor single-cell/spatial/multi-omics papers** covering 38,306 captions and 141,092 subpanels + vector label-tilt measurement of 504 axes across 294 Tier-1 PDFs), 172 chart recipes from `scidraw.msttnote.cn`, and official *Nature*/*Cell Press*/*Science* artwork specifications.
 
 ## Core Non-Negotiable Rules
+
+0. **ABSOLUTE INTEGRITY & ENGINE-ROUTING LAWS (ZERO EXCEPTIONS!)**:
+   - **Strict Zero-LLM-Image-Generation Ban**: Whether creating **individual experimental/statistical data plots**, **multi-panel figure assemblies / plate layouts**, **microscopy/radiology/histology/blot panels**, OR **biological schematics / experimental timelines / working models**, **NEVER** invoke an image-generation LLM or diffusion model (`image-generator`, Imagen, DALL·E, Midjourney, Flux, Stable Diffusion, GPT-Image, etc.) to directly generate, redraw, synthesize, enhance, or stitch ANY figure or subpanel!
+     - *Data charts*: 100% programmatic vector/hybrid code reading verified raw data tables/objects.
+     - *Multi-panel plate assembly*: 100% programmatic 1:1 mm vector composition (**R `patchwork`/`cowplot`/`grid`** or **Python `GridSpec`/`PyMuPDF`**) or **Adobe Illustrator** — NEVER ask an image-generation model to composite panels.
+     - *Real imaging (MRI, H&E, IHC, mIF, WB, gross photos)*: Embed **ONLY authentic raw user-supplied images** (`cowplot::draw_image()` / `plot_real_image_panel()`), or reserve a clean 1:1 mm empty drop-in box (`plot_visual_placeholder_r()` / `add_visual_placeholder_frame()`).
+     - *Biological schematics, timelines & working models*: Construct strictly via **programmatic editable vector graphics** (clean hand-coded SVG / R `grid` / `ggplot2` / Python `matplotlib.patches` / Draw.io / Inkscape vector primitives) OR reserve an exact **1:1 mm BioRender / Adobe Illustrator drop-in frame** with a structured vector brief — **NEVER** generate schematics or working models via an image-generation LLM!
+   - **R-First Plotting Priority (Data-Native Routing)**:
+     - **Prefer R (`ggplot2` / `ComplexHeatmap` / `patchwork` / `ggrastr` / `Seurat` / `survminer` / [scripts/sci_plot_r.R](./scripts/sci_plot_r.R)) by default** whenever R and required packages are available OR when raw data natively fits R (`.rds`, `.RData`, `.qs`, Seurat / `SingleCellExperiment` objects, DESeq2 / edgeR / limma / GSEA / survival / clinical `.csv`/`.tsv`/`.xlsx` tables, statistical plots, complex heatmaps/OncoPrints, and `patchwork`/`cowplot` multi-panel plate assembly).
+     - **Use Python (`matplotlib` / `seaborn` / `scanpy` / [scripts/sci_plot_py.py](./scripts/sci_plot_py.py))** ONLY when: (i) the user explicitly requests Python, (ii) R or required R packages are unavailable in the environment, OR (iii) the raw input data/workflow is **natively Python-centric** (`.h5ad` / `AnnData` / `SpatialData` / `Scanpy` / `Squidpy` / `COMMOT` / `.npy`/`.npz`/`.pt` / foundation-model embeddings / heavy OME-TIFF or WSI slide cropping where Python avoids brittle cross-language conversion).
+     - *Note*: Even when all figures are authored in R (`cairo_pdf` / `svglite`), `python scripts/sci_plot_py.py --verify` / `--audit-plate` may be invoked strictly as a read-only post-export PDF/plate QA tool.
 
 1. **1:1 Physical Print Scale (mm, ready for Adobe Illustrator)**:
    - Never plot on default `7×7 in` / `6×4 in` canvases expecting to shrink in AI.
@@ -128,10 +139,11 @@ Read [color-architecture.md](./references/color-architecture.md):
 - Check if the workspace already contains a `palette.json` / color mapping file; reuse exact hex codes for matching entities.
 - Separate categorical groups, lineage hue-families, diverging Z-score/logFC scales (`RdBu`), and sequential expression scales (`LightGray -> Crimson/Indigo` or `Viridis`).
 
-### Step 4: Generate Plot Using Reusable Helper Kit
-- **Python**: import functions from [scripts/sci_plot_py.py](./scripts/sci_plot_py.py) (`apply_cns_style`, `mm_to_in`, `add_umap_corner_axes`, `rasterize_dense_artists`, `save_ai_figure`, `PALETTES`, `verify_ai_pdf`).
-- **R**: source [scripts/sci_plot_r.R](./scripts/sci_plot_r.R) (`theme_cns`, `pt_to_lwd`, `pt_to_ggtext`, `umap_corner_axes`, `save_ai_pdf`, `CNS_PALETTES`).
-- Refer to [hybrid-vector-raster-ai.md](./references/hybrid-vector-raster-ai.md) for edge cases (Scanpy, Seaborn clustermap, ComplexHeatmap, Seurat, `ggrepel`, rotated labels, broken axes).
+### Step 4: Generate Plot Programmatically Using Reusable Helper Kit (R First; Zero LLM Image Generation!)
+- **NEVER call `image-generator` or any LLM/diffusion image generator** for charts, plate assembly, real imaging, or schematics!
+- **R (Preferred Default when R is available or raw data is `.rds`/`.csv`/`.tsv`/Seurat/DESeq2/clinical)**: source [scripts/sci_plot_r.R](./scripts/sci_plot_r.R) (`theme_cns`, `pt_to_lwd`, `pt_to_ggtext`, `umap_corner_axes`, `save_ai_pdf`, `CNS_PALETTES`, `compose_visual_hero_r`, `tag_panels_1to1`).
+- **Python (When requested, R unavailable, or raw data is Python-native `.h5ad`/`SpatialData`/`.npy`/`.pt`/OME-TIFF)**: import from [scripts/sci_plot_py.py](./scripts/sci_plot_py.py) (`apply_cns_style`, `mm_to_in`, `add_umap_corner_axes`, `rasterize_dense_artists`, `save_ai_figure`, `PALETTES`, `verify_ai_pdf`).
+- Refer to [hybrid-vector-raster-ai.md](./references/hybrid-vector-raster-ai.md) for edge cases (Seurat, ComplexHeatmap, `ggrepel`, Scanpy, Seaborn clustermap, rotated labels, broken axes).
 
 ### Step 5: Mandatory Programmatic & Visual Verification
 Before finishing:
