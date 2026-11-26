@@ -4321,11 +4321,17 @@ def verify_ai_pdf(pdf_path: str) -> Dict:
 
 
 JOURNAL_PLATE_CAPS_MM = {
+    "general": (180.0, 220.0),
     "nature": (180.0, 220.0),
+    "nat_cell_biol": (180.0, 220.0),
+    "nat_commun": (180.0, 220.0),
+    "nat_cancer": (180.0, 220.0),
+    "nat_methods": (180.0, 220.0),
     "nature_sister": (180.0, 220.0),
     "nat_med": (180.0, 215.0),
     "cell": (174.0, 215.0),
     "cancer_cell": (174.0, 215.0),
+    "immunity": (174.0, 215.0),
     "science": (184.0, 218.0),
     "aacr": (178.0, 210.0),
 }
@@ -4334,6 +4340,11 @@ IN_FIGURE_BANNED_TERMS_RE = re.compile(
     r"\b(audit(?:ed)?|crosswalk|parsimonious|habitats?|out-of-fold|\bOOF\b|quarantined|phase cliff|adversarial|triage cascade|[a-z]\d{2}_[A-Za-z0-9_]+|[A-Z]\d+_[A-Z]\d+_[A-Za-z]+|(?:Primary|Temporal|Cohort|Val|Discovery)\d{2,3}|CNA(?:Pure|Gate))\b",
     re.I,
 )
+UK_JOURNAL_US_SPELLING_RE = re.compile(
+    r"\b(standardized|normalized|tumors?|tumoral|hematoxylin|signaling|modeling|analyzed|characterized|neighbors?|neighborhoods?|labeled)\b",
+    re.I,
+)
+IN_FIGURE_TYPO_RE = re.compile(r"\b(Nutri|Lymphocye|Macrophge|Fibroblst)\b")
 
 
 def audit_plate_density(
@@ -4343,11 +4354,11 @@ def audit_plate_density(
 ) -> Dict:
     """
     Audit assembled publication plate(s) (PDF, PNG, or directory of plates) for:
-      1. Physical mm canvas & page-height utilization (detect half-empty <65% ED/Supp plates)
-      2. Pure-white pixel ratio (RGB > 246; flag >76% Main / >80% ED sparse plates)
-      3. Dead internal horizontal white bands (>= 10 mm empty vertical gaps inside content)
-      4. In-figure AI-tell & internal notebook/code text leaks (scanned from PDF live text)
-      5. Twin half-empty ED consolidation suggestions & orphaned real-visual asset checks
+      1. Physical mm canvas & page-height utilization (Main >=72%; relaxed Supp/ED >=50%)
+      2. Pure-white pixel ratio (RGB > 246; flag >76% Main / >88% relaxed Supp/ED — never pad small-n scatters with KDE contours!)
+      3. Dead internal horizontal white bands (>=10 mm Main / >=14 mm Supp/ED empty vertical gaps)
+      4. In-figure AI-tell, spelling, typo & internal notebook/code text leaks (scanned from PDF live text)
+      5. Pragmatic Supp/ED consolidation & orphaned real-visual asset checks
     """
     from PIL import Image
 
@@ -4370,6 +4381,10 @@ def audit_plate_density(
         is_ed = bool(re.search(r"(?:^|[_\-])(?:edf|ed_?fig|ext|supp|figs?\d*s|s\d+)", fp.stem, re.I))
         tier = "ED/Supp" if is_ed else "Main"
         text_leaks = []
+        spell_leaks = []
+        typo_leaks = []
+        has_mri_or_micro = False
+        has_scale_text = False
         n_rasters = 0
 
         if ext == ".pdf":
@@ -4381,6 +4396,11 @@ def audit_plate_density(
             h_mm = round(page.rect.height * MM_PER_INCH / 72.0, 1)
             full_txt = page.get_text("text")
             text_leaks = sorted({m.group(0) for m in IN_FIGURE_BANNED_TERMS_RE.finditer(full_txt)})
+            if journal in ("nature", "nat_cell_biol", "nature_sister"):
+                spell_leaks = sorted({m.group(0) for m in UK_JOURNAL_US_SPELLING_RE.finditer(full_txt)})
+            typo_leaks = sorted({m.group(0) for m in IN_FIGURE_TYPO_RE.finditer(full_txt)})
+            has_mri_or_micro = bool(re.search(r"\b(MRI|T2W|H&E|mIHC|immunofluorescence|multiplex IF|histology|microscop)\b", full_txt, re.I))
+            has_scale_text = bool(re.search(r"\b\d+(?:\.\d+)?\s*(?:µm|μm|um|mm|cm)\b", full_txt))
             n_rasters = len(page.get_image_info(xrefs=False))
             pix = page.get_pixmap(dpi=120, alpha=False)
             arr = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.height, pix.width, 3)
@@ -4425,20 +4445,30 @@ def audit_plate_density(
             max_void_mm = round(best_run * mm_per_row, 1)
 
         warnings = []
-        w_thresh = 80.0 if is_ed else 76.0
+        w_thresh = 88.0 if is_ed else 76.0
         if white_pct > w_thresh:
-            warnings.append(f"SPARSE ({white_pct}% white > {w_thresh:.0f}% target; add visual/matrix anchor or tighten bare charts)")
-        if is_ed and h_util_pct < 65.0:
-            warnings.append(f"HALF-EMPTY ED ({h_mm}mm = {h_util_pct}% of {h_cap:.0f}mm; merge twin sparse ED plates into 1 full-height 6-8 panel plate)")
+            if is_ed:
+                warnings.append(f"VERY SPARSE SUPP/ED ({white_pct}% white > {w_thresh:.0f}%; tighten excessive outer margins, but keep Supp scatter plots clean — NEVER pad with decorative KDE contours)")
+            else:
+                warnings.append(f"SPARSE MAIN ({white_pct}% white > {w_thresh:.0f}% target; add visual/matrix anchor or consolidate repetitive bare charts — never pad small-n scatters with decorative KDE contours)")
+        if is_ed and h_util_pct < 50.0:
+            warnings.append(f"VERY SHORT ED/SUPP ({h_mm}mm = {h_util_pct}% of {h_cap:.0f}mm; only merge if another tiny Supp plate covers the same theme — otherwise clean simplicity is fine)")
             half_empty_eds.append(fp.name)
         elif (not is_ed) and h_util_pct < 72.0:
             warnings.append(f"UNDERFILLED MAIN ({h_mm}mm = {h_util_pct}% of {h_cap:.0f}mm)")
         if h_mm > h_cap + 4.0:
             warnings.append(f"HEIGHT OVERFLOW ({h_mm}mm > {h_cap:.0f}mm {journal} cap)")
-        if max_void_mm >= 10.0:
-            warnings.append(f"INTERNAL WHITE VOID ({max_void_mm}mm empty band >= 10mm; tighten header/legend/image spacing)")
+        void_thresh = 14.0 if is_ed else 10.0
+        if max_void_mm >= void_thresh:
+            warnings.append(f"INTERNAL WHITE VOID ({max_void_mm}mm empty band >= {void_thresh:.0f}mm; tighten header/legend/image spacing)")
         if text_leaks:
             warnings.append(f"IN-FIGURE AI/JARGON TEXT ({len(text_leaks)}): {text_leaks[:8]}")
+        if spell_leaks:
+            warnings.append(f"US SPELLING IN UK-JOURNAL FIGURE ({journal}): {spell_leaks[:6]} (use UK spelling e.g. 'Standardised', 'Tumour', 'Signalling')")
+        if typo_leaks:
+            warnings.append(f"LIKELY IN-FIGURE TYPO: {typo_leaks} (e.g. 'Nutri' -> 'Neutro')")
+        if has_mri_or_micro and n_rasters >= 1 and not has_scale_text:
+            warnings.append("MISSING DRAWN SCALE BAR LABEL ON MRI/MICROSCOPY PLATE: draw calibrated scale bar on image OR report FOV in legend (NEVER claim a phantom scale bar!)")
 
         results.append({
             "file": fp.name,
@@ -4457,7 +4487,7 @@ def audit_plate_density(
     global_notes = []
     if len(half_empty_eds) >= 2:
         global_notes.append(
-            f"CONSOLIDATE HALF-EMPTY ED PLATES: {len(half_empty_eds)} ED plates ({half_empty_eds}) use <65% page height; merge thematically related 4-panel ED plates into full-height 7-8 panel plates."
+            f"OPTIONAL SUPP/ED CONSOLIDATION: {len(half_empty_eds)} very short Supp/ED plates ({half_empty_eds}) use <50% page height; merge only if they share one theme — keep Supp plots clean without visual padding."
         )
     asset_summary = None
     if assets_dir and Path(assets_dir).is_dir():
@@ -4471,6 +4501,9 @@ def audit_plate_density(
                 f"REAL-VISUAL ASSET GATE: {len(asset_files)} visual asset file(s) found in '{Path(assets_dir).name}' vs {total_rasters} embedded raster layer(s) across PDFs — verify 0 microscopy/MRI/IF images were accidentally dropped!"
             )
 
+    global_notes.append(
+        "SCHEMATIC & SCALE-BAR TRUTHFULNESS GATE: (1) Confirm every 'scale bar, XX' claimed in Figure Legends is physically drawn on the image; (2) Cross-check 100% of numbers (um, AUC, HR, P, n) inside schematics & Working Model against data panels for zero mismatch or icon-on-text overlap."
+    )
     return {
         "journal": journal,
         "canvas_cap_mm": [w_cap, h_cap],

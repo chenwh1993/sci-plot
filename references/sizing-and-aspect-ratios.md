@@ -44,6 +44,7 @@ Use this lookup table to set exact `(width_mm, height_mm)` when generating a sin
 | **Hero Real-Image Strip (`hero_pathology_strip` / `hero_mif_codex_panel` / `hero_radiology_mri_ct`)** | **`174–180 × 65–92`** | `2.0–2.8 : 1` (**Full-Width Hero Band!**) | **35–48% of plate height!** | Multi-condition H&E/IHC/mIF overview + magnified ROI + channels, or Pre/Post clinical MRI/CT showcase |
 | **2/3-Width Real Visual Hero (`pathology_he_ihc` / `mif_hero` / `radiology_mri_ct` / `gross_tumor_ivis`)** | **`115–122 × 58–82`** | `1.5–2.0 : 1` (**2/3 Row Hero!**) | Paired w/ 1/3 quant column | High-impact representative H&E/IHC/mIF/MRI/excised tumors with ruler; never shrink `< 80 mm` wide! |
 | **1/2-Width Single-FOV Histology / Organoid / Blot (`histology` / `ihc` / `organoid_microscopy` / `western_blot`)** | **`86–90 × 52–62`** | `1.3–1.7 : 1` | **1/2 Row** | Minimum crisp readable scale bar & cellular detail (`600 dpi` raster + vector scale bar/kDa) |
+| **Compact Module Schematic (`mouse_timeline_schematic` / `cell_assay_schematic` / `spatial_workflow_schematic`)** | **`88 × 28`** (`176 × 24`) / **`64 × 34`** / **`76 × 38`** | `2.0–7.0 : 1` (compact strip) | Top strip (`15–20%` H) | *In vivo* dosing/MRI timeline (`Day 0→14→21`), *in vitro* assay setup, or spatial distance-ring concept (`52–59%` of CNS papers have `≥2` schematics!) |
 
 ---
 
@@ -118,17 +119,17 @@ Use one of these **3 CNS Hero Grid Blueprints** (`create_visual_hero_layout()` i
 
 Crowded plates look unreadable, **but overly sparse plates (`> 76%` pure white or half-empty `4`-panel Extended Data plates) look thin and less substantial than real flagship CNS figures.** Balance BOTH bounds (full details in [journal-figure-standards.md](./journal-figure-standards.md)):
 
-| Density / Layout Metric | Multi-Modal Main Fig Target | Pure Stat/Clinical Main Fig | Extended Data / Supp Fig Target | Automated Red Flag (`--audit-plate`) |
+| Density / Layout Metric | Multi-Modal Main Fig Target | Pure Stat/Clinical Main Fig | Extended Data / Supp Fig *(Relaxed & Clean!)* | Automated Red Flag (`--audit-plate`) |
 | :--- | :---: | :---: | :---: | :--- |
-| **Pure-White Pixel Ratio (`RGB > 246`)** | **`52–72%`** | **`≤ 75%`** | **`≤ 78%`** | **`> 76%`** (Main) / **`> 80%`** (ED/Supp) |
-| **Page Height Utilization (`H / H_max`)** | **`82–98%`** (`180–218 mm`) | **`82–98%`** | **`75–98%`** (`165–215 mm`) | **`< 65%`** (half-empty plate!) |
-| **Panels per Extended Data / Supp Plate** | `8–10` (Main) | `8–10` (Main) | **`6–8` panels** | **`≤ 4` panels** + `< 65%` height → **merge twin ED plates!** |
-| **Internal Horizontal White Void** | **`< 8 mm`** | **`< 8 mm`** | **`< 8 mm`** | **`≥ 10 mm`** empty band between legend/title & image! |
-| **Visual / High-Density Anchor per Main Fig** | **≥ 1 real image Hero** | **≥ 1 rich matrix/OncoPrint/KM+Risk** | Paired visual/QC proof | `0` real visuals AND `0` complex matrices (`all scatter/bar`) |
+| **Pure-White Pixel Ratio (`RGB > 246`)** | **`52–72%`** | **`≤ 75%`** | **`≤ 86%` (clean & airy OK!)** | **`> 76%`** (Main) / **`> 88%`** (ED/Supp) |
+| **Page Height Utilization (`H / H_max`)** | **`82–98%`** (`180–218 mm`) | **`82–98%`** | **`55–95%` (relaxed)** | **`< 72%`** (Main) / **`< 50%`** (ED/Supp) |
+| **Panels per Extended Data / Supp Plate** | `8–10` (Main) | `8–10` (Main) | **`4–8` panels (clean)** | **`≤ 4` panels** + **`< 50%`** height (only if twin plates share one theme) |
+| **Internal Horizontal White Void** | **`< 8 mm`** | **`< 8 mm`** | **`< 12 mm`** | **`≥ 10 mm`** (Main) / **`≥ 14 mm`** (ED/Supp) |
+| **Visual / High-Density Anchor** | **≥ 1 real image Hero** | **≥ 1 rich matrix/OncoPrint/KM+Risk** | **NOT required (keep QC/scatter clean!)** | Main Fig only: `0` real visuals AND `0` complex matrices |
 
-### Five Quick Fixes When a Plate Looks Too Empty or "PPT-Like"
-1. **Upgrade Bare Charts**: Always add **95% CI bands + aligned `Number at risk` table + `HR (95% CI)`** to every KM survival curve (`plot_km_survival`); never stretch a 3–4 bar univariate chart across `≥ 58 mm`; consolidate `≥ 3` tiny scatter plots into faceted 2D-contour strips or a correlation/forest summary.
+### Five Quick Fixes When a Main Plate Looks Too Empty (Without Fake Padding on Supp Figs!)
+1. **Upgrade Bare Main Charts — Never Pad Small-`n` Scatters With Decorative Contours**: Always add **95% CI bands + aligned `Number at risk` table + `HR (95% CI)`** to every primary KM survival curve (`plot_km_survival`); never stretch a 3–4 bar chart across `≥ 58 mm`; in Main Figures, consolidate `≥ 3` repetitive correlations into a **clean correlation matrix, lollipop, or forest plot**. **On Supplementary / Extended Data scatter plots (`n < 300`), keep them crisp and unadorned (points + regression line ± CI) — NEVER add decorative 2D KDE contour lines just to reduce white space!**
 2. **Promote Buried Real Visuals & Audit Unused Assets**: Check `100%` of extracted microscopy / MRI / H&E / spatial ROI files against assembled plates so zero real images are accidentally dropped or buried in ED while a Main Fig sits `80%` white.
-3. **Merge Twin Half-Empty `4`-Panel ED Plates**: Combine two thematically related `4`-panel (`115–125 mm`, `83–90%` white) ED plates into ONE full-height `7–8` panel plate (`185–215 mm`), freeing slots for single-channel mIF splits, antibody controls, mouse toxicity/organ H&E, or uncropped blots.
-4. **Ban Plain Code Text-Box Schematics**: Never render Study Designs (`Fig. 1a`) or Final Working Models as matplotlib rounded rectangles + straight arrows — draw biological cell/organ/receptor illustrations in Illustrator / BioRender (or reserve clean vector frames with `add_visual_placeholder_frame()`).
-5. **Purge In-Figure AI / Notebook Labels**: Never leave `audit`, `crosswalk`, `parsimonious`, `habitat`, `OOF`, `Quarantined`, `phase cliff`, `Adversarial`, or pipeline cluster IDs (`c02_Fib_*`) inside plot titles or axis labels.
+3. **Pragmatic ED / Supp Consolidation (No Force-Stuffing)**: Keep clean `55–85%`-height Supplementary/ED plates relaxed and readable; only merge when `≥ 2` ultra-tiny (`≤ 3–4` panels, `< 50%` height) plates fragment the exact same validation story.
+4. **Multi-Figure Biological Vector Schematics (Ban Plain Code Text-Boxes!)**: Include compact `24–38 mm` experimental-design/dosing-timeline/spatial-workflow schematics across *in vivo*, *in vitro*, and spatial figures (`52–59%` of CNS papers have `≥ 2` schematics!), draw all Study Designs & Working Models as biological cell/organ vector art (never plain matplotlib rounded text-boxes + arrows), and **cross-check 100% of numbers inside schematics against data panels** (zero value drift or icon-on-text overlap!).
+5. **Zero Phantom Scale Bars & In-Figure Text Hygiene**: NEVER claim a `scale bar` in a legend unless physically drawn on the image (draw calibrated bar or report FOV); match journal UK/US spelling inside axes (`Standardised` vs `Standardized`); purge `audit`, `crosswalk`, `parsimonious`, `habitat`, `OOF`, `Quarantined`, `phase cliff`, `Adversarial`, typos (`Neutro` not `Nutri`), and pipeline cluster IDs (`c02_Fib_*`) from all plot titles and axes.
