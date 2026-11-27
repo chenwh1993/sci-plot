@@ -286,8 +286,44 @@ theme_umap_clean <- function(preset = "cns_compact", legend_pos = "none") {
 #' @param label_clusters Logical: draw editable vector labels at each cluster's median centroid
 #' @param label_style "pill" (clean translucent white pill badge, Zemin Zhang Cell 2024 style) or "plain" / "repel"
 #' @param label_size Font size in pt (default 5.5 for subclusters, 6.0 for major lineages)
+#' Exact-Physical-MM Mini L-Shaped Corner Arrow Axes for UMAP / t-SNE (ggplot2 + grid)
+#'
+#' Anchors the L-corner at `origin_npc` in NPC coordinates and extends X and Y by
+#' EXACTLY `grid::unit(arrow_mm, "mm")` at final draw/PDF export time — guaranteeing
+#' identical physical mm length along BOTH X and Y across panels of ANY width/aspect ratio
+#' or inside patchwork composites (never distorted by data span or aspect changes!).
+add_umap_corner_axes_r <- function(xlabel = "UMAP1",
+                                   ylabel = "UMAP2",
+                                   arrow_mm = 8.0,
+                                   origin_npc = c(0.03, 0.03),
+                                   lwd_pt = 0.45,
+                                   fontsize_pt = 5.5,
+                                   label_pad_mm = 1.2,
+                                   color = "#1A1A1A") {
+  x0 <- grid::unit(origin_npc[1], "npc")
+  y0 <- grid::unit(origin_npc[2], "npc")
+  L  <- grid::unit(arrow_mm, "mm")
+  pad <- grid::unit(label_pad_mm, "mm")
+  arr <- grid::arrow(length = grid::unit(1.1, "mm"), type = "closed")
+  gp_line <- grid::gpar(col = color, fill = color, lwd = lwd_pt * (96 / 72))
+  gp_txt  <- grid::gpar(col = color, fontfamily = "Arial", fontsize = fontsize_pt)
+
+  grob <- grid::grobTree(
+    grid::segmentsGrob(x0 = x0, y0 = y0, x1 = x0 + L, y1 = y0, arrow = arr, gp = gp_line),
+    grid::segmentsGrob(x0 = x0, y0 = y0, x1 = x0, y1 = y0 + L, arrow = arr, gp = gp_line),
+    grid::textGrob(xlabel, x = x0 + 0.5 * L, y = y0 - pad, just = c("center", "top"), gp = gp_txt),
+    grid::textGrob(ylabel, x = x0 - pad, y = y0 + 0.5 * L, rot = 90, just = c("center", "bottom"), gp = gp_txt)
+  )
+  annotation_custom(grob, xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf)
+}
+
+# Backward-compatible alias referenced in SKILL.md
+umap_corner_axes <- add_umap_corner_axes_r
+
 #' @param show_corner_axes Logical: draw vector mini L-shaped UMAP1/UMAP2 arrow axes at bottom-left
-#' @param axis_frac Length of corner arrows as fraction of x/y span (default 0.17)
+#' @param arrow_mm Exact physical length (in mm) for BOTH X and Y corner arrows (default 8.0 mm;
+#'   guaranteed equal X/Y physical length across all panel sizes and patchwork layouts!)
+#' @param axis_frac Deprecated legacy alias retained only for backward compatibility (ignored when arrow_mm is set)
 #' @param legend_pos "none" (default when direct-labeled), "bottom", or "right"
 #' @param legend_ncol Number of columns in legend (if shown)
 #' @param raster_dpi Resolution for rasterized point cloud (default 600)
@@ -303,6 +339,7 @@ plot_cloudy_umap <- function(df,
                              label_style = c("colored", "pill", "repel", "plain"),
                              label_size = 5.5,
                              show_corner_axes = TRUE,
+                             arrow_mm = 8.0,
                              axis_frac = 0.17,
                              axis_labels = c("UMAP1", "UMAP2"),
                              legend_pos = "none",
@@ -325,10 +362,8 @@ plot_cloudy_umap <- function(df,
   yr <- range(plot_df[[y_col]], na.rm = TRUE)
   xspan <- diff(xr)
   yspan <- diff(yr)
-  max_span <- max(xspan, yspan)
-  # Use equal data scale (coord_fixed(ratio = 1)) so UMAP1 & UMAP2 arrows have IDENTICAL physical mm length!
-  xlim_pad <- c(xr[1] - xspan * 0.08, xr[2] + xspan * 0.05)
-  ylim_pad <- c(yr[1] - yspan * 0.08, yr[2] + yspan * 0.05)
+  xlim_pad <- c(xr[1] - xspan * 0.10, xr[2] + xspan * 0.05)
+  ylim_pad <- c(yr[1] - yspan * 0.10, yr[2] + yspan * 0.05)
 
   p <- ggplot(plot_df, aes(x = .data[[x_col]], y = .data[[y_col]], color = .data[[group_col]]))
 
@@ -347,24 +382,12 @@ plot_cloudy_umap <- function(df,
 
   # 3. Vector bottom-left mini L-shaped corner arrow axes (EXACT EQUAL physical length in mm!)
   if (show_corner_axes) {
-    ox <- xlim_pad[1] + max_span * 0.02
-    oy <- ylim_pad[1] + max_span * 0.02
-    ax_len <- max_span * axis_frac  # Identical X and Y data length under coord_fixed(ratio = 1)!
-    lbl_pad <- max_span * 0.030
-    arr <- grid::arrow(length = unit(1.1, "mm"), type = "closed")
-    lwd_ax <- pt_to_lwd(0.45)
-
-    p <- p +
-      annotate("segment", x = ox, xend = ox + ax_len, y = oy, yend = oy,
-               linewidth = lwd_ax, colour = "#1A1A1A", arrow = arr) +
-      annotate("segment", x = ox, xend = ox, y = oy, yend = oy + ax_len,
-               linewidth = lwd_ax, colour = "#1A1A1A", arrow = arr) +
-      annotate("text", x = ox + ax_len * 0.5, y = oy - lbl_pad,
-               label = axis_labels[1], family = "Arial", size = pt_to_ggtext(5.5),
-               colour = "#1A1A1A", hjust = 0.5, vjust = 1) +
-      annotate("text", x = ox - lbl_pad, y = oy + ax_len * 0.5,
-               label = axis_labels[2], family = "Arial", size = pt_to_ggtext(5.5),
-               colour = "#1A1A1A", hjust = 0.5, vjust = 0, angle = 90)
+    len_mm <- if (!is.null(arrow_mm)) arrow_mm else 8.0
+    p <- p + add_umap_corner_axes_r(
+      xlabel = axis_labels[1], ylabel = axis_labels[2],
+      arrow_mm = len_mm, origin_npc = c(0.03, 0.03),
+      lwd_pt = 0.45, fontsize_pt = 5.5
+    )
   }
 
   # 4. Vector editable Arial cluster labels at robust median centroids
@@ -505,24 +528,13 @@ plot_atlas_umap_composite <- function(umap_df,
     show_corner_axes = FALSE,
     legend_pos = "none", raster_dpi = raster_dpi, seed = seed
   )
-  # Draw exact equal-length L-axes anchored cleanly in the padded bottom-left corner
-  ox <- xlim_atlas[1] + ms_m * 0.03
-  oy <- ylim_atlas[1] + ms_m * 0.03
-  ax_len <- ms_m * 0.18
-  lbl_pad <- ms_m * 0.032
-  arr <- grid::arrow(length = unit(1.1, "mm"), type = "closed")
-  lwd_ax <- pt_to_lwd(0.45)
+  # Draw exact equal-physical-mm L-axes anchored cleanly in the padded bottom-left corner
   p_main <- p_main +
-    annotate("segment", x = ox, xend = ox + ax_len, y = oy, yend = oy,
-             linewidth = lwd_ax, colour = "#1A1A1A", arrow = arr) +
-    annotate("segment", x = ox, xend = ox, y = oy, yend = oy + ax_len,
-             linewidth = lwd_ax, colour = "#1A1A1A", arrow = arr) +
-    annotate("text", x = ox + ax_len * 0.5, y = oy - lbl_pad,
-             label = "UMAP1", family = "Arial", size = pt_to_ggtext(5.5),
-             colour = "#1A1A1A", hjust = 0.5, vjust = 1) +
-    annotate("text", x = ox - lbl_pad, y = oy + ax_len * 0.5,
-             label = "UMAP2", family = "Arial", size = pt_to_ggtext(5.5),
-             colour = "#1A1A1A", hjust = 0.5, vjust = 0, angle = 90) +
+    add_umap_corner_axes_r(
+      xlabel = "UMAP1", ylabel = "UMAP2",
+      arrow_mm = 8.5, origin_npc = c(0.03, 0.04),
+      lwd_pt = 0.45, fontsize_pt = 5.5
+    ) +
     coord_fixed(ratio = 1, xlim = xlim_atlas, ylim = ylim_atlas, clip = "off")
 
   # 2. Circular major-lineage inset UMAP (600-dpi raster dots + crisp 0.45 pt vector circle ring)
@@ -556,15 +568,17 @@ plot_atlas_umap_composite <- function(umap_df,
     p_umap_combo <- cowplot::ggdraw(p_main) +
       cowplot::draw_plot(p_inset, x = ix, y = iy, width = inset_frac, height = inset_frac)
   } else {
-    # Pure ggplot2 fallback via annotation_custom
-    xm <- range(umap_df[[x_col]], na.rm = TRUE); ym <- range(umap_df[[y_col]], na.rm = TRUE)
-    xs <- diff(xm); ys <- diff(ym)
+    # Pure ggplot2 fallback via annotation_custom (isotropic box anchored in padded margin!)
+    span_in <- ms_m * inset_frac * 1.18
     if (inset_pos == "topleft") {
-      xmin_i <- xm[1] - xs * 0.06; xmax_i <- xmin_i + xs * inset_frac * 1.15
-      ymax_i <- ym[2] + ys * 0.04; ymin_i <- ymax_i - ys * inset_frac * 1.15
+      xmin_i <- xlim_atlas[1] + xs_m * 0.02; xmax_i <- xmin_i + span_in
+      ymax_i <- ylim_atlas[2] - ys_m * 0.02; ymin_i <- ymax_i - span_in
+    } else if (inset_pos == "bottomright") {
+      xmax_i <- xlim_atlas[2] - xs_m * 0.02; xmin_i <- xmax_i - span_in
+      ymin_i <- ylim_atlas[1] + ys_m * 0.02; ymax_i <- ymin_i + span_in
     } else {
-      xmax_i <- xm[2] + xs * 0.04; xmin_i <- xmax_i - xs * inset_frac * 1.15
-      ymax_i <- ym[2] + ys * 0.04; ymin_i <- ymax_i - ys * inset_frac * 1.15
+      xmax_i <- xlim_atlas[2] - xs_m * 0.02; xmin_i <- xmax_i - span_in
+      ymax_i <- ylim_atlas[2] - ys_m * 0.02; ymin_i <- ymax_i - span_in
     }
     p_umap_combo <- p_main + annotation_custom(ggplotGrob(p_inset), xmin = xmin_i, xmax = xmax_i, ymin = ymin_i, ymax = ymax_i)
   }
@@ -930,25 +944,31 @@ theme_spatial_clean <- function(dark_bg = FALSE, preset = "cns_compact", legend_
 }
 
 #' Add true physical vector scale bar (50/100/500 um or 1 mm) to a ggplot spatial slice
+#' Handles both normal and inverted (image-pixel) y-axes cleanly, and uses font-unit `vjust`
+#' so label clearance above the bar stays physically constant across tall and short panels.
 add_spatial_scalebar_r <- function(p, xlim, ylim, length_um = 500, units_per_um = 1.0,
                                    loc = c("lower_right", "lower_left"), dark_bg = FALSE) {
   loc <- match.arg(loc)
-  xspan <- diff(xlim); yspan <- diff(ylim)
+  xspan <- abs(diff(xlim)); yspan <- abs(diff(ylim))
   blen  <- length_um * units_per_um
   lbl   <- if (length_um >= 1000 && length_um %% 1000 == 0) sprintf("%d mm", length_um / 1000) else sprintf("%d \u03bcm", round(length_um))
   fg    <- if (dark_bg) "#FFFFFF" else "#1A1A1A"
-  yb    <- ylim[1] + yspan * 0.05
+  y_rev <- ylim[2] < ylim[1]
+  yb    <- if (!y_rev) min(ylim) + yspan * 0.05 else max(ylim) - yspan * 0.05
+  x_rev <- xlim[2] < xlim[1]
   if (loc == "lower_right") {
-    bx1 <- xlim[2] - xspan * 0.05; bx0 <- bx1 - blen
+    bx1 <- if (!x_rev) max(xlim) - xspan * 0.05 else min(xlim) + xspan * 0.05
+    bx0 <- if (!x_rev) bx1 - blen else bx1 + blen
   } else {
-    bx0 <- xlim[1] + xspan * 0.05; bx1 <- bx0 + blen
+    bx0 <- if (!x_rev) min(xlim) + xspan * 0.05 else max(xlim) - xspan * 0.05
+    bx1 <- if (!x_rev) bx0 + blen else bx0 - blen
   }
   p +
     annotate("segment", x = bx0, xend = bx1, y = yb, yend = yb,
              linewidth = pt_to_lwd(1.4), colour = fg, lineend = "butt") +
-    annotate("text", x = (bx0 + bx1) / 2, y = yb + yspan * 0.025, label = lbl,
+    annotate("text", x = (bx0 + bx1) / 2, y = yb, label = lbl,
              family = "Arial", fontface = "bold", size = pt_to_ggtext(5.4),
-             colour = fg, hjust = 0.5, vjust = 0)
+             colour = fg, hjust = 0.5, vjust = -0.45)
 }
 
 #' Signed Distance to Tumor–Stroma Boundary Gradient Plot (mean curves + 95% CI ribbons)

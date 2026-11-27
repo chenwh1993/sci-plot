@@ -33,22 +33,27 @@ Empirically distilled from **747 Tier-1 2025–2026 tumor papers**: **grouped ma
 
 ![Clinical oncology and ML gallery](assets/demo_v2_clinical_gallery.png)
 
-### 6. Clinical & Correlation Upgrades (`180 × 54 mm`, 66 KB PDF)
+### 6. Real-Imaging ROI Zoom, Multiplex mIF/CODEX Split+Merge & Multi-Signal Spatial Grid (`180 × 198 mm`, 600 dpi Hybrid PDF)
+Programmatic publication-grade imaging composites: **(a) real H&E/IHC/MRI overview + lossless cropped ROI magnifications** with vector ROI boxes, `ConnectionPatch` leader lines, and physical scale bars (`plot_image_roi_zoom`), **(b) multi-group multiplex fluorescence Overview + ROI Merge + single-color split channels** with honest `shared_contrast=True` (`plot_multiplex_channels_merge`), and **(c) multi-sample synchronized spatial transcriptomics grid** `[H&E + niches + continuous genes/scores]` with locked coordinates & `shared_vlim=True` shared column colorbars (`plot_spatial_signal_grid`).
+
+![Imaging, multiplex stain, and spatial composites](assets/demo_v2_imaging_multiplex_spatial_composites.png)
+
+### 7. Clinical & Correlation Upgrades (`180 × 54 mm`, 66 KB PDF)
 **Paired Pre/Post longitudinal slope + half-box**, **oncology RECIST waterfall**, and **split-triangle correlation matrix**.
 
 ![Clinical and correlation upgrades](assets/demo_v2_clinical_and_corr.png)
 
-### 3. Single-Row 4-Panel Hybrid Vector + Raster Figure (`180 × 52 mm`, 503 KB PDF)
+### 8. Single-Row 4-Panel Hybrid Vector + Raster Figure (`180 × 52 mm`, 503 KB PDF)
 600 dpi rasterized data layers (25k-cell UMAP, 15k-gene Volcano, 2,880-cell Heatmap) + 100% live editable Arial vector axes, ticks, gene labels, and boxplot.
 
 ![4-panel hybrid CNS figure](assets/demo_4panel_hybrid.png)
 
-### 2. Multi-Subcluster Atlas UMAP Composite (`160 × 95 mm`, 651 KB PDF)
-600 dpi cohesive subcluster UMAP + circular major-lineage inset + equal-length vector L-axes + tight multi-column vector legend with colored lineage banners — all in one PDF (zero manual stitching).
+### 9. Multi-Subcluster Atlas UMAP Composite (`160 × 95 mm`, 651 KB PDF)
+600 dpi cohesive subcluster UMAP + circular major-lineage inset + exact equal-mm vector L-axes + tight multi-column vector legend with colored lineage banners — all in one PDF (zero manual stitching).
 
 ![Atlas UMAP composite](assets/demo_atlas_umap.png)
 
-### 3. Empirically #1 Default CNS Color System
+### 10. Empirically #1 Default CNS Color System
 Auto-activated on import/source (`Blue` & `Red` present in 100% of audited Tier-1 papers, followed by `Teal/Sage`, `Amber`, `Plum`).
 
 ![Default CNS color palette](assets/cns_default_palette_card.png)
@@ -66,7 +71,8 @@ Auto-activated on import/source (`Blue` & `Red` present in 100% of audited Tier-
 - **Adobe Illustrator Anti-Fragmentation Toolkit**:
   - Python `coalesce_pdf_text_runs()` collapses matplotlib mathtext `Td` splits and optical `TJ` kerning splits into single PDF text lines (`verify_ai_pdf()` gate).
   - Native Illustrator script [`scripts/MergeSciPlotText.jsx`](scripts/MergeSciPlotText.jsx) merges remaining PDF subscript (`Ts`) and multi-style fragments inside Illustrator into single-line `PointText` objects (supporting 0° horizontal and ±90° vertical y-axes).
-- **Two-Tier Cloudy UMAP**: Direct same-color cluster labeling for ≤ 12 clusters (`plot_cloudy_umap`) and circular major-inset + grouped banner legend for 15–100 subclusters (`plot_atlas_umap_composite`), with exact equal-length L-axes.
+- **Two-Tier Cloudy UMAP with Render-Time Equal-mm L-Axes**: Direct same-color cluster labeling for ≤ 12 clusters (`plot_cloudy_umap`) and circular major-inset + grouped banner legend for 15–100 subclusters (`plot_atlas_umap_composite`), with render-time physical-mm L-axes (`arrow_mm = 8.0` via Python `offset_copy` & R `grid::unit(..., "mm")`) guaranteeing exact `8.0 × 8.0 mm` X/Y arrows across every panel aspect ratio and post-hoc colorbar.
+- **Real-Imaging, Multiplex-Stain & Multi-Spatial Composites**: Built-in programmatic layouts for real histology/IHC/MRI overview + lossless cropped magnified ROIs (`plot_image_roi_zoom`), multi-antibody mIF/CODEX/IMC single-channel splits + additive `Merge` with `shared_contrast=True` (`plot_multiplex_channels_merge`), and multi-sample synchronized spatial transcriptomics `[H&E + niches + N genes/scores]` grids with `shared_vlim=True` (`plot_spatial_signal_grid`).
 - **Concise Axis Labels & CNS Micro-Aesthetics**: Empirical 1–3 word Sentence-case axis rules, zero-gap bar baselines, bar/group spacing (`CNS_SPEC`), hollow boxplots, Z-score `[-2, +2]` clipping, and biological italicization rules.
 
 ---

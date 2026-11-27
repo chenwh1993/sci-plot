@@ -562,24 +562,54 @@ def add_panel_label(
     letter: str,
     preset: str = "cns_compact",
     journal: str = "nature",
-    x: float = -0.14,
-    y: float = 1.06,
+    x: Optional[float] = None,
+    y: Optional[float] = None,
+    offset_mm: Tuple[float, float] = (-4.5, 1.8),
 ) -> None:
-    """Place bold panel letter at top-left of an axes."""
+    """
+    Place bold Arial panel letter at top-left of an axes.
+
+    By default (when `x` and `y` are None), uses a live render-time physical-mm
+    offset (`offset_copy(ax.transAxes, ..., units='inches')`) anchored at the
+    top-left corner `(0, 1)` of `ax` so panel letters stay at an IDENTICAL
+    physical distance (default -4.5 mm left, +1.8 mm above) across narrow 30 mm
+    and wide 160 mm panels without ever drifting off the page. Pass explicit
+    `x`/`y` in axes fraction if manual legacy positioning is desired.
+    """
+    from matplotlib.transforms import offset_copy
+
     p = TYPOGRAPHY_PRESETS[preset]
     sz = p["panel_label"]
     lbl = letter.lower() if journal == "nature" else letter.upper()
     if journal == "cell" and preset == "cns_compact":
         sz = 9.0
-    ax.text(
-        x, y, lbl,
-        transform=ax.transAxes,
-        fontsize=sz,
-        fontweight="bold",
-        va="bottom",
-        ha="left",
-        color="#000000",
-    )
+    if x is None and y is None:
+        dx_in = float(offset_mm[0]) / MM_PER_INCH
+        dy_in = float(offset_mm[1]) / MM_PER_INCH
+        trans = offset_copy(ax.transAxes, fig=ax.figure, x=dx_in, y=dy_in, units="inches")
+        ax.text(
+            0.0, 1.0, lbl,
+            transform=trans,
+            fontsize=sz,
+            fontweight="bold",
+            va="bottom",
+            ha="left",
+            color="#000000",
+            clip_on=False,
+        )
+    else:
+        ax.text(
+            -0.14 if x is None else x,
+            1.06 if y is None else y,
+            lbl,
+            transform=ax.transAxes,
+            fontsize=sz,
+            fontweight="bold",
+            va="bottom",
+            ha="left",
+            color="#000000",
+            clip_on=False,
+        )
 
 
 def label_all_panels(
@@ -587,14 +617,15 @@ def label_all_panels(
     start: str = "a",
     preset: str = "cns_compact",
     journal: str = "nature",
-    x: float = -0.14,
-    y: float = 1.06,
+    x: Optional[float] = None,
+    y: Optional[float] = None,
+    offset_mm: Tuple[float, float] = (-4.5, 1.8),
     skip_axes: Optional[Sequence[plt.Axes]] = None,
 ) -> Dict[str, plt.Axes]:
     """
     Enforce the CNS 1-Panel = 1-Unique-Letter Law (90.4% across 8,852 CNS panels):
     Automatically stamp ONE unique sequential bold Arial panel letter ('a','b','c'... or 'A','B','C'...)
-    onto every independent analytical panel in reading order.
+    onto every independent analytical panel in reading order at an identical physical-mm corner offset.
     Pass attached colorbars, KM risk tables, or ROI zoom insets in `skip_axes` ONLY.
     """
     skip_ids = {id(a) for a in (skip_axes or [])}
@@ -605,7 +636,7 @@ def label_all_panels(
             continue
         raw_ch = chr(ord("a") + idx)
         lbl = raw_ch.lower() if journal == "nature" else raw_ch.upper()
-        add_panel_label(ax, lbl, preset=preset, journal=journal, x=x, y=y)
+        add_panel_label(ax, lbl, preset=preset, journal=journal, x=x, y=y, offset_mm=offset_mm)
         mapping[lbl] = ax
         idx += 1
     return mapping
@@ -617,6 +648,8 @@ def plot_real_image_panel(
     title: Optional[str] = None,
     scalebar_label: Optional[str] = None,
     scalebar_frac: float = 0.16,
+    um_per_px: Optional[float] = None,
+    scalebar_um: Optional[float] = None,
     dark_bg: bool = False,
     roi_box_frac: Optional[Tuple[float, float, float, float]] = None,
     roi_color: str = "#FFFFFF",
@@ -625,13 +658,13 @@ def plot_real_image_panel(
     """
     Render a real visual evidence panel (MRI/CT, H&E, IHC, mIF/CODEX, gross tumor/IVIS, organoid)
     with locked 1:1 physical aspect ratio, zero pixel coordinate axes, optional vector ROI zoom box
-    (x0, y0, w, h in axes fraction), and crisp vector physical scale bar.
+    (x0, y0, w, h in axes fraction), and crisp physical-mm calibrated vector scale bar.
     """
-    import matplotlib.image as mpimg
     from matplotlib.patches import Rectangle
 
-    img = mpimg.imread(image_or_path) if isinstance(image_or_path, str) else np.asarray(image_or_path)
-    ax.imshow(img, interpolation="nearest")
+    img = _load_image_array(image_or_path)
+    cmap_gray = "gray" if img.ndim == 2 else None
+    ax.imshow(img, cmap=cmap_gray, interpolation="nearest", rasterized=True)
     ax.set_aspect("equal")
     ax.set_xticks([])
     ax.set_yticks([])
@@ -648,18 +681,12 @@ def plot_real_image_panel(
             fill=False, edgecolor=roi_color, linewidth=0.75, linestyle="--", zorder=6,
         )
         ax.add_patch(rect)
-    if scalebar_label:
-        fg = "#FFFFFF" if dark_bg else "#1A1A1A"
-        bg_pill = "#000000" if dark_bg else "#FFFFFF"
-        x1 = 0.96
-        x0 = max(0.04, x1 - scalebar_frac)
-        yb = 0.06
-        ax.plot([x0, x1], [yb, yb], transform=ax.transAxes, color=fg, linewidth=1.6, solid_capstyle="butt", zorder=8)
-        ax.text(
-            0.5 * (x0 + x1), yb + 0.025, scalebar_label,
-            transform=ax.transAxes, ha="center", va="bottom",
-            fontsize=5.5, fontweight="bold", color=fg, zorder=9,
-            bbox=dict(boxstyle="round,pad=0.12", facecolor=bg_pill, edgecolor="none", alpha=0.65),
+    if scalebar_label or (scalebar_um is not None and um_per_px is not None):
+        _draw_image_scalebar(
+            ax, img.shape[1],
+            scalebar_um=scalebar_um, um_per_px=um_per_px,
+            scalebar_label=scalebar_label, scalebar_frac=scalebar_frac,
+            dark_bg=dark_bg, loc="lower right", fontsize=5.5, lw=1.6,
         )
 
 
@@ -743,57 +770,892 @@ def create_visual_hero_layout(
     return fig, {"hero_ax": ax_hero, "quant_axes": quant_axes, "ordered_axes": ordered, "size_mm": (w_mm, h_mm)}
 
 
+# ==============================================================================
+# REAL IMAGING, MULTIPLEX STAINING (SPLIT + MERGE) & MULTI-SIGNAL SPATIAL GRIDS
+# ==============================================================================
+
+# Colorblind-safe orthogonal dark-field fluorophore palette (NEVER red + green alone!)
+CNS_FLUOR_PALETTE: Dict[str, str] = {
+    "DAPI": "#3B82F6",      # Dim nuclear blue
+    "NUCLEI": "#3B82F6",
+    "HOECHST": "#3B82F6",
+    "PANCK": "#E5E7EB",     # Crisp silver-white epithelial/tumor mask
+    "CK": "#E5E7EB",
+    "EPCAM": "#38BDF8",     # Cyan
+    "KRT5": "#22C55E",      # Emerald
+    "UPK2": "#F97316",      # Vivid orange
+    "CD31": "#FACC15",      # Gold vasculature
+    "VWF": "#FACC15",
+    "HER2": "#F43F5E",      # Magenta-rose
+    "ERBB2": "#F43F5E",
+    "PD-L1": "#F43F5E",
+    "PDL1": "#F43F5E",
+    "CXCL13": "#F43F5E",
+    "CD8": "#22C55E",       # Emerald
+    "CD3": "#38BDF8",       # Cyan
+    "CD20": "#A855F7",      # Violet
+    "CD68": "#F97316",      # Orange
+    "CD163": "#C084FC",     # Light violet
+    "SMA": "#FB923C",       # Warm amber-orange
+    "A-SMA": "#FB923C",
+    "ALPHA-SMA": "#FB923C",
+}
+
+_FLUOR_FALLBACK_CYCLE = ["#38BDF8", "#F43F5E", "#FACC15", "#22C55E", "#A855F7", "#F97316", "#E5E7EB"]
+
+
+def _resolve_fluor_color(marker: str, idx: int, colors: Optional[Dict[str, str]] = None) -> str:
+    if colors and marker in colors:
+        return colors[marker]
+    key = str(marker).strip().upper().replace("Α", "ALPHA").replace("α", "ALPHA")
+    if key in CNS_FLUOR_PALETTE:
+        return CNS_FLUOR_PALETTE[key]
+    for k, hex_c in CNS_FLUOR_PALETTE.items():
+        if k in key:
+            return hex_c
+    return _FLUOR_FALLBACK_CYCLE[idx % len(_FLUOR_FALLBACK_CYCLE)]
+
+
+def _load_image_array(image_or_path) -> np.ndarray:
+    """Load PNG/JPG/TIFF/OME-TIFF path or array-like into a NumPy array."""
+    if isinstance(image_or_path, (str, Path)):
+        p = str(image_or_path)
+        if p.lower().endswith((".tif", ".tiff")):
+            try:
+                import tifffile
+                return np.asarray(tifffile.imread(p))
+            except Exception:
+                pass
+        try:
+            from PIL import Image
+            return np.asarray(Image.open(p))
+        except Exception:
+            import matplotlib.image as mpimg
+            return np.asarray(mpimg.imread(p))
+    return np.asarray(image_or_path)
+
+
+def _normalize_channel(
+    arr2d: np.ndarray,
+    vmin: Optional[float] = None,
+    vmax: Optional[float] = None,
+    p_low: float = 1.0,
+    p_high: float = 99.5,
+    gamma: float = 1.0,
+) -> np.ndarray:
+    """Percentile-clip and scale a 2D fluorescence channel to [0, 1] with optional gamma."""
+    a = np.asarray(arr2d, dtype=float)
+    if a.ndim == 3:
+        # Collapse pre-colored single-channel RGB by max luminance so intensity is preserved
+        a = np.max(a[..., :3], axis=-1)
+    lo = float(np.nanpercentile(a, p_low)) if vmin is None else float(vmin)
+    hi = float(np.nanpercentile(a, p_high)) if vmax is None else float(vmax)
+    if hi <= lo:
+        hi = lo + 1e-6
+    norm = np.clip((a - lo) / (hi - lo), 0.0, 1.0)
+    norm = np.nan_to_num(norm, nan=0.0)
+    if gamma != 1.0:
+        norm = np.power(norm, float(gamma))
+    return norm
+
+
+def _render_fluor_rgb(norm2d: np.ndarray, hex_color: str, bg_val: float = 0.03) -> np.ndarray:
+    """Tint a normalized [0, 1] 2D channel into a dark-field RGB image."""
+    rgb_c = np.array(mpl.colors.to_rgb(hex_color), dtype=float)
+    out = bg_val + norm2d[..., None] * (rgb_c[None, None, :] * (1.0 - bg_val))
+    return np.clip(out, 0.0, 1.0)
+
+
+def _blend_multiplex_merge(
+    norm_channels: Dict[str, np.ndarray],
+    marker_colors: Dict[str, str],
+    weights: Optional[Dict[str, float]] = None,
+    bg_val: float = 0.03,
+) -> np.ndarray:
+    """Physically faithful additive dark-field RGB merge of normalized 2D fluorescence channels."""
+    first = next(iter(norm_channels.values()))
+    acc = np.full((first.shape[0], first.shape[1], 3), bg_val, dtype=float)
+    for m, arr in norm_channels.items():
+        rgb_c = np.array(mpl.colors.to_rgb(marker_colors[m]), dtype=float)
+        key_u = m.upper()
+        if weights and m in weights:
+            w = float(weights[m])
+        elif key_u in ("DAPI", "NUCLEI", "HOECHST"):
+            w = 0.72
+        elif key_u in ("PANCK", "CK") and float(np.mean(rgb_c)) > 0.78:
+            # Keep structural silver-white PanCK subtle in additive merge so focal markers never clip to white
+            w = 0.55
+        else:
+            w = 1.0
+        acc += (arr * w)[..., None] * rgb_c[None, None, :]
+    return np.clip(acc, 0.0, 1.0)
+
+
+def _readable_header_color(hex_color: str) -> str:
+    """Ensure colored marker title text placed on a white canvas has strong WCAG readability."""
+    r, g, b = mpl.colors.to_rgb(hex_color)
+    lum = 0.299 * r + 0.587 * g + 0.114 * b
+    if lum > 0.72:
+        # Darken very bright white/silver/yellow fluorophore hues for crisp title contrast on white
+        if max(r, g, b) - min(r, g, b) < 0.12:
+            return "#4B5563"  # slate-gray for white/silver PanCK
+        return mpl.colors.to_hex((r * 0.62, g * 0.56, b * 0.25))
+    return hex_color
+
+
+def _format_phys_len(length_um: float) -> str:
+    if length_um >= 1000.0 and abs(length_um / 1000.0 - round(length_um / 1000.0, 1)) < 1e-6:
+        val = length_um / 1000.0
+        return f"{int(val)} mm" if abs(val - round(val)) < 1e-6 else f"{val:.1f} mm"
+    return f"{int(round(length_um))} \u03bcm"
+
+
+def _draw_image_scalebar(
+    ax: plt.Axes,
+    img_width_px: int,
+    scalebar_um: Optional[float] = None,
+    um_per_px: Optional[float] = None,
+    scalebar_label: Optional[str] = None,
+    scalebar_frac: float = 0.18,
+    dark_bg: bool = False,
+    loc: str = "lower right",
+    fontsize: float = 5.2,
+    lw: float = 1.6,
+) -> None:
+    """Draw a calibrated 100% vector physical scale bar on a raster image axes."""
+    if scalebar_um is not None and um_per_px is not None and img_width_px > 0:
+        frac = float(np.clip((float(scalebar_um) / float(um_per_px)) / float(img_width_px), 0.04, 0.45))
+        lbl = scalebar_label or _format_phys_len(float(scalebar_um))
+    elif scalebar_label:
+        frac = float(np.clip(scalebar_frac, 0.05, 0.40))
+        lbl = scalebar_label
+    else:
+        return
+
+    from matplotlib.transforms import offset_copy
+
+    fg = "#FFFFFF" if dark_bg else "#1A1A1A"
+    bg_pill = "#000000" if dark_bg else "#FFFFFF"
+    if "left" in loc:
+        x0 = 0.04
+        x1 = min(0.96, x0 + frac)
+    else:
+        x1 = 0.96
+        x0 = max(0.04, x1 - frac)
+    # Fixed physical-mm inset from bottom edge (2.0 mm) and fixed text clearance above bar (1.1 mm),
+    # completely immune to panel height (20 mm tile vs 100 mm Hero image)!
+    fig = ax.figure
+    trans_bar = offset_copy(ax.transAxes, fig=fig, x=0.0, y=2.0 / MM_PER_INCH, units="inches")
+    trans_txt = offset_copy(ax.transAxes, fig=fig, x=0.0, y=3.1 / MM_PER_INCH, units="inches")
+    ax.plot([x0, x1], [0.0, 0.0], transform=trans_bar, color=fg, linewidth=lw, solid_capstyle="butt", zorder=9)
+    ax.text(
+        0.5 * (x0 + x1), 0.0, lbl,
+        transform=trans_txt, ha="center", va="bottom",
+        fontsize=fontsize, fontweight="bold", color=fg, zorder=10,
+        bbox=dict(boxstyle="round,pad=0.10", facecolor=bg_pill, edgecolor="none", alpha=0.62),
+    )
+
+
+def plot_image_roi_zoom(
+    image_or_path,
+    rois: Sequence[Dict],
+    um_per_px: Optional[float] = None,
+    overview_scalebar_um: Optional[float] = None,
+    overview_scalebar_label: Optional[str] = None,
+    overview_title: Optional[str] = None,
+    coord_mode: str = "frac",
+    layout: str = "right",
+    connect_lines: bool = True,
+    dark_bg: bool = False,
+    fig: Optional[plt.Figure] = None,
+    subspec=None,
+    size_mm: Tuple[float, float] = (120.0, 62.0),
+    overview_ratio: float = 1.65,
+    preset: str = "cns_compact",
+) -> Tuple[plt.Figure, Dict[str, object]]:
+    """
+    CNS Publication-Grade Real Image Overview + Magnified ROI Zoom Composite
+    (for H&E, IHC, mIF/CODEX, clinical/preclinical MRI, or gross-tumour images).
+
+    Features:
+      - Losslessly crops 1-3 magnified ROIs from the high-resolution source array (600-dpi rasterized)
+      - Draws 100% AI-editable vector ROI boxes on the overview + crisp color-matched ConnectionPatch
+        leader lines linking each ROI box to its magnified panel
+      - Automatically calibrates physical vector scale bars on BOTH overview and each magnified ROI
+        when `um_per_px` is supplied (or uses explicit `scalebar_label` strings)
+      - Works standalone (`fig=None`) OR embedded directly inside a parent multi-panel GridSpec (`subspec`)
+
+    Parameters
+    ----------
+    image_or_path : str, Path, or ndarray (H, W) or (H, W, 3|4)
+    rois          : list of 1-3 dicts, each with:
+                      `x0, y0, w, h` (normalized [0, 1] fractions if coord_mode='frac',
+                      or integer pixel coords if coord_mode='px'; origin at top-left),
+                      optional `label`, `color`, `scalebar_um`, `scalebar_label`
+    layout        : 'right' (overview left, 1-3 ROIs stacked right),
+                    'bottom' (overview top, 1-3 ROIs in bottom row), or
+                    'inset' (single ROI tucked as crisp zoomed inset in lower/upper corner)
+    """
+    from matplotlib.patches import Rectangle, ConnectionPatch
+
+    apply_cns_style(preset)
+    img = _load_image_array(image_or_path)
+    H, W = img.shape[0], img.shape[1]
+    n_rois = len(rois)
+    if n_rois == 0:
+        raise ValueError("`rois` must contain at least 1 ROI specification dict.")
+
+    default_roi_colors = ["#FFFFFF", "#FACC15", "#38BDF8"] if dark_bg else ["#1A1A1A", "#C84B4B", "#3B6EA5"]
+
+    if fig is None:
+        fig = new_cns_figure(size_mm[0], size_mm[1], preset=preset)
+        gs_parent = fig.add_gridspec(1, 1)[0]
+    else:
+        gs_parent = subspec if subspec is not None else fig.add_gridspec(1, 1)[0]
+
+    roi_axes: List[plt.Axes] = []
+    if layout == "bottom":
+        gs = gs_parent.subgridspec(2, 1, height_ratios=[overview_ratio, 1.0], hspace=0.14)
+        ax_ov = fig.add_subplot(gs[0, 0])
+        gs_r = gs[1, 0].subgridspec(1, n_rois, wspace=0.10)
+        roi_axes = [fig.add_subplot(gs_r[0, i]) for i in range(n_rois)]
+    elif layout == "inset":
+        ax_ov = fig.add_subplot(gs_parent)
+        inset_pos = rois[0].get("inset_rect", (0.56, 0.04, 0.40, 0.40))
+        roi_axes = [ax_ov.inset_axes(inset_pos)]
+    else:  # 'right'
+        gs = gs_parent.subgridspec(1, 2, width_ratios=[overview_ratio, 1.0], wspace=0.07)
+        ax_ov = fig.add_subplot(gs[0, 0])
+        ax_ov.set_anchor("E")
+        gs_r = gs[0, 1].subgridspec(n_rois, 1, hspace=0.18)
+        roi_axes = [fig.add_subplot(gs_r[i, 0]) for i in range(n_rois)]
+        for ax_r0 in roi_axes:
+            ax_r0.set_anchor("W")
+
+    # Render Overview (600-dpi raster image + 100% vector overlays)
+    cmap_gray = "gray" if img.ndim == 2 else None
+    ax_ov.imshow(img, cmap=cmap_gray, interpolation="nearest", rasterized=True)
+    ax_ov.set_aspect("equal")
+    ax_ov.set_xticks([])
+    ax_ov.set_yticks([])
+    frame_ec = "#333333" if dark_bg else "#CCCCCC"
+    for sp in ax_ov.spines.values():
+        sp.set_visible(True)
+        sp.set_linewidth(0.45)
+        sp.set_edgecolor(frame_ec)
+    if overview_title:
+        ax_ov.set_title(overview_title, fontsize=6.5, pad=2.5, color="#000000")
+
+    _draw_image_scalebar(
+        ax_ov, W, scalebar_um=overview_scalebar_um, um_per_px=um_per_px,
+        scalebar_label=overview_scalebar_label, dark_bg=dark_bg, loc="lower right",
+    )
+
+    roi_boxes_px = []
+    for i, rspec in enumerate(rois):
+        if i >= len(roi_axes):
+            break
+        ax_r = roi_axes[i]
+        rcol = rspec.get("color", default_roi_colors[i % len(default_roi_colors)])
+        if coord_mode == "frac":
+            x0 = int(round(float(rspec["x0"]) * W))
+            y0 = int(round(float(rspec["y0"]) * H))
+            rw = int(round(float(rspec["w"]) * W))
+            rh = int(round(float(rspec["h"]) * H))
+        else:
+            x0, y0, rw, rh = int(rspec["x0"]), int(rspec["y0"]), int(rspec["w"]), int(rspec["h"])
+        x0 = max(0, min(W - 2, x0))
+        y0 = max(0, min(H - 2, y0))
+        x1 = max(x0 + 2, min(W, x0 + rw))
+        y1 = max(y0 + 2, min(H, y0 + rh))
+        roi_boxes_px.append((x0, y0, x1, y1))
+
+        # Vector dashed ROI box on Overview
+        rect = Rectangle(
+            (x0, y0), x1 - x0, y1 - y0,
+            fill=False, edgecolor=rcol, linewidth=0.80, linestyle="--", zorder=7,
+        )
+        ax_ov.add_patch(rect)
+        rlbl = rspec.get("label")
+        if rlbl:
+            ax_ov.text(
+                x0 + 0.02 * (x1 - x0), max(2, y0 - 0.015 * H), str(rlbl),
+                fontsize=5.2, fontweight="bold", color=rcol, ha="left", va="bottom", zorder=8,
+                bbox=dict(boxstyle="round,pad=0.08", facecolor="#000000" if dark_bg else "#FFFFFF", edgecolor="none", alpha=0.62),
+            )
+
+        # Render lossless crop (or optional independent high-mag objective image) on Magnified ROI panel
+        crop = _load_image_array(rspec["crop_image"]) if rspec.get("crop_image") is not None else img[y0:y1, x0:x1]
+        crop_um_per_px = rspec.get("um_per_px", um_per_px)
+        ax_r.imshow(crop, cmap=("gray" if crop.ndim == 2 else None), interpolation="nearest", rasterized=True)
+        ax_r.set_aspect("equal")
+        ax_r.set_xticks([])
+        ax_r.set_yticks([])
+        for sp in ax_r.spines.values():
+            sp.set_visible(True)
+            sp.set_linewidth(0.85)
+            sp.set_edgecolor(rcol)
+        if rlbl and layout != "inset":
+            ax_r.set_title(str(rlbl), fontsize=6.0, pad=2.0, color="#000000")
+
+        _draw_image_scalebar(
+            ax_r, crop.shape[1],
+            scalebar_um=rspec.get("scalebar_um"),
+            um_per_px=crop_um_per_px,
+            scalebar_label=rspec.get("scalebar_label"),
+            dark_bg=dark_bg, loc="lower right", fontsize=5.0, lw=1.4,
+        )
+
+        # Vector ConnectionPatch leader lines from Overview ROI box -> Zoomed ROI corners
+        if connect_lines and layout in ("right", "bottom"):
+            if layout == "right":
+                pairs = [((x1, y0), (0.0, 1.0)), ((x1, y1), (0.0, 0.0))]
+            else:
+                pairs = [((x0, y1), (0.0, 1.0)), ((x1, y1), (1.0, 1.0))]
+            for pt_ov, pt_r in pairs:
+                con = ConnectionPatch(
+                    xyA=pt_ov, coordsA=ax_ov.transData,
+                    xyB=pt_r, coordsB=ax_r.transAxes,
+                    color=rcol, linewidth=0.55, linestyle="--", alpha=0.85, zorder=6,
+                )
+                fig.add_artist(con)
+
+    return fig, {"overview_ax": ax_ov, "roi_axes": roi_axes, "roi_boxes_px": roi_boxes_px}
+
+
+def plot_multiplex_channels_merge(
+    channels_or_groups: Dict,
+    colors: Optional[Dict[str, str]] = None,
+    layout: str = "merge_left_grid",
+    merge_position: str = "first",
+    shared_contrast: bool = True,
+    p_low: float = 1.0,
+    p_high: float = 99.5,
+    gamma: float = 1.0,
+    channel_weights: Optional[Dict[str, float]] = None,
+    roi_box: Optional[Dict] = None,
+    um_per_px: Optional[float] = None,
+    scalebar_um: Optional[float] = None,
+    scalebar_label: Optional[str] = None,
+    roi_scalebar_um: Optional[float] = None,
+    roi_scalebar_label: Optional[str] = None,
+    fig: Optional[plt.Figure] = None,
+    subspec=None,
+    size_mm: Tuple[float, float] = (176.0, 68.0),
+    preset: str = "cns_compact",
+) -> Tuple[plt.Figure, Dict[str, object]]:
+    """
+    CNS Publication-Grade Multiplex Fluorescence (mIF / mIHC / CODEX / IMC / CyCIF)
+    Single-Color Split Channels + Additive Pseudo-Color Merge Composite.
+
+    Supports TWO data structures automatically:
+      1. Single sample: `{"DAPI": arr_or_path, "CD31": arr, "PanCK": arr, "HER2": arr}`
+      2. Multi-group comparison (e.g. Responder vs Non-Responder):
+         `{"Responder": {"DAPI": ..., "HER2": ...}, "Non-responder": {"DAPI": ..., "HER2": ...}}`
+         When `shared_contrast=True` (DEFAULT for honest science!), computes identical per-channel
+         (vmin, vmax) percentiles across ALL groups so intensity comparisons are strictly fair!
+
+    Layouts
+    -------
+    - `'merge_left_grid'` : Classic Nature/Cell — Large Merge on left + compact 2xN single-channel tiles right
+                            (if `roi_box` is provided, left shows Overview Merge + ROI Merge, right shows ROI single channels!)
+    - `'strip'`           : Clean horizontal strip `[Merge | Ch1 | Ch2 | ...]` (or Merge last)
+    - `'rows_by_group'`   : Multi-row cohort matrix (Row = Group/Patient, Columns = `[Merge, Ch1, Ch2, ...]`)
+    """
+    from matplotlib.patches import Rectangle
+
+    apply_cns_style(preset)
+
+    # Detect single-sample dict vs multi-group nested dict
+    first_val = next(iter(channels_or_groups.values()))
+    is_multi_group = isinstance(first_val, dict)
+    if is_multi_group:
+        groups_raw = {str(g): {str(m): _load_image_array(v) for m, v in d.items()} for g, d in channels_or_groups.items()}
+        group_names = list(groups_raw.keys())
+        marker_names = list(next(iter(groups_raw.values())).keys())
+        if layout == "merge_left_grid":
+            layout = "rows_by_group"
+    else:
+        groups_raw = {"Sample": {str(m): _load_image_array(v) for m, v in channels_or_groups.items()}}
+        group_names = ["Sample"]
+        marker_names = list(groups_raw["Sample"].keys())
+
+    marker_colors = {m: _resolve_fluor_color(m, i, colors) for i, m in enumerate(marker_names)}
+
+    # Compute honest shared per-channel contrast limits across all groups
+    ch_limits: Dict[str, Tuple[float, float]] = {}
+    if shared_contrast:
+        for m in marker_names:
+            pooled = np.concatenate([
+                (np.max(groups_raw[g][m][..., :3], axis=-1) if groups_raw[g][m].ndim == 3 else groups_raw[g][m]).ravel()
+                for g in group_names
+            ])
+            lo = float(np.nanpercentile(pooled, p_low))
+            hi = float(np.nanpercentile(pooled, p_high))
+            ch_limits[m] = (lo, hi if hi > lo else lo + 1e-6)
+
+    # Normalize channels and synthesize additive dark-field Merge per group
+    groups_norm: Dict[str, Dict[str, np.ndarray]] = {}
+    groups_merge: Dict[str, np.ndarray] = {}
+    for g in group_names:
+        gn = {}
+        for m in marker_names:
+            vmin, vmax = ch_limits[m] if shared_contrast else (None, None)
+            gn[m] = _normalize_channel(groups_raw[g][m], vmin=vmin, vmax=vmax, p_low=p_low, p_high=p_high, gamma=gamma)
+        groups_norm[g] = gn
+        groups_merge[g] = _blend_multiplex_merge(gn, marker_colors, weights=channel_weights)
+
+    if fig is None:
+        fig = new_cns_figure(size_mm[0], size_mm[1], preset=preset)
+        gs_parent = fig.add_gridspec(1, 1)[0]
+    else:
+        gs_parent = subspec if subspec is not None else fig.add_gridspec(1, 1)[0]
+
+    def _style_dark_ax(ax_i: plt.Axes, rgb_img: np.ndarray, corner_tag: Optional[str] = None, tag_color: str = "#FFFFFF"):
+        from matplotlib.transforms import offset_copy
+        ax_i.imshow(rgb_img, interpolation="nearest", rasterized=True)
+        ax_i.set_aspect("equal")
+        ax_i.set_xticks([])
+        ax_i.set_yticks([])
+        ax_i.set_facecolor("#0A0A0A")
+        for sp in ax_i.spines.values():
+            sp.set_visible(True)
+            sp.set_linewidth(0.45)
+            sp.set_edgecolor("#2A2A2A")
+        if corner_tag:
+            trans_tag = offset_copy(ax_i.transAxes, fig=ax_i.figure, x=1.2 / MM_PER_INCH, y=-1.2 / MM_PER_INCH, units="inches")
+            ax_i.text(
+                0.0, 1.0, corner_tag, transform=trans_tag,
+                ha="left", va="top", fontsize=5.6, fontweight="bold", color=tag_color, zorder=10,
+                bbox=dict(boxstyle="round,pad=0.12", facecolor="#000000", edgecolor="none", alpha=0.68),
+            )
+
+    def _draw_merge_color_legend(ax_m: plt.Axes):
+        """Draw a font-metric-fitted vertical stack of color-coded marker labels top-left on Merge (immune to tile size)."""
+        from matplotlib.offsetbox import AnchoredOffsetbox, TextArea, VPacker
+        children = [
+            TextArea(m, textprops=dict(color=marker_colors[m], fontsize=4.9, fontweight="bold", family="Arial"))
+            for m in marker_names
+        ]
+        box = VPacker(children=children, align="left", pad=0.0, sep=1.4)
+        ab = AnchoredOffsetbox(
+            loc="upper left", child=box, frameon=True, pad=0.22, borderpad=0.28,
+        )
+        ab.patch.set_facecolor("#000000")
+        ab.patch.set_edgecolor("none")
+        ab.patch.set_alpha(0.70)
+        ab.patch.set_boxstyle("round,pad=0.22,rounding_size=0.18")
+        ab.set_zorder(10)
+        ax_m.add_artist(ab)
+
+    def _crop_roi(arr: np.ndarray, rbox: Dict) -> Tuple[np.ndarray, Tuple[int, int, int, int]]:
+        H, W = arr.shape[0], arr.shape[1]
+        cmode = rbox.get("coord_mode", "frac")
+        if cmode == "frac":
+            x0, y0 = int(round(rbox["x0"] * W)), int(round(rbox["y0"] * H))
+            rw, rh = int(round(rbox["w"] * W)), int(round(rbox["h"] * H))
+        else:
+            x0, y0, rw, rh = int(rbox["x0"]), int(rbox["y0"]), int(rbox["w"]), int(rbox["h"])
+        x0, y0 = max(0, min(W - 2, x0)), max(0, min(H - 2, y0))
+        x1, y1 = max(x0 + 2, min(W, x0 + rw)), max(y0 + 2, min(H, y0 + rh))
+        return arr[y0:y1, x0:x1], (x0, y0, x1, y1)
+
+    axes_out: Dict[str, object] = {"marker_colors": marker_colors}
+    n_ch = len(marker_names)
+
+    if layout == "rows_by_group" or is_multi_group:
+        n_rows = len(group_names)
+        col_order = (["Merge"] + marker_names) if merge_position == "first" else (marker_names + ["Merge"])
+        if roi_box is not None:
+            col_order = ["Overview"] + col_order
+        n_cols = len(col_order)
+        gs = gs_parent.subgridspec(n_rows, n_cols, wspace=0.05, hspace=0.08)
+        grid_axes = []
+        for r, g in enumerate(group_names):
+            row_ax = []
+            for c, cname in enumerate(col_order):
+                ax_c = fig.add_subplot(gs[r, c])
+                if cname == "Overview":
+                    ov_rgb = groups_merge[g]
+                    _style_dark_ax(ax_c, ov_rgb)
+                    _, (rx0, ry0, rx1, ry1) = _crop_roi(ov_rgb, roi_box)
+                    ax_c.add_patch(Rectangle((rx0, ry0), rx1 - rx0, ry1 - ry0, fill=False, edgecolor="#000000", lw=1.35, ls="-", alpha=0.65, zorder=7))
+                    ax_c.add_patch(Rectangle((rx0, ry0), rx1 - rx0, ry1 - ry0, fill=False, edgecolor="#FFFFFF", lw=0.75, ls="--", zorder=8))
+                    if r == n_rows - 1:
+                        _draw_image_scalebar(ax_c, ov_rgb.shape[1], scalebar_um=scalebar_um, um_per_px=um_per_px, scalebar_label=scalebar_label, dark_bg=True)
+                elif cname == "Merge":
+                    m_img = _crop_roi(groups_merge[g], roi_box)[0] if roi_box is not None else groups_merge[g]
+                    _style_dark_ax(ax_c, m_img)
+                    if r == n_rows - 1:
+                        _draw_image_scalebar(
+                            ax_c, m_img.shape[1],
+                            scalebar_um=roi_scalebar_um if roi_box else scalebar_um,
+                            um_per_px=um_per_px,
+                            scalebar_label=roi_scalebar_label if roi_box else scalebar_label,
+                            dark_bg=True,
+                        )
+                else:
+                    ch_arr = _crop_roi(groups_norm[g][cname], roi_box)[0] if roi_box is not None else groups_norm[g][cname]
+                    _style_dark_ax(ax_c, _render_fluor_rgb(ch_arr, marker_colors[cname]))
+                if r == 0:
+                    hdr_col = "#1A1A1A" if cname in ("Merge", "Overview") else _readable_header_color(marker_colors[cname])
+                    ax_c.set_title(cname, fontsize=6.2, fontweight="bold", pad=2.5, color=hdr_col)
+                if c == 0 and is_multi_group:
+                    ax_c.set_ylabel(g, fontsize=6.2, fontweight="bold", color="#1A1A1A", labelpad=3.5)
+                row_ax.append(ax_c)
+            grid_axes.append(row_ax)
+        axes_out["grid_axes"] = grid_axes
+        return fig, axes_out
+
+    g = group_names[0]
+    m_full = groups_merge[g]
+    if layout == "strip":
+        col_order = (["Merge"] + marker_names) if merge_position == "first" else (marker_names + ["Merge"])
+        gs = gs_parent.subgridspec(1, len(col_order), wspace=0.05)
+        strip_axes = []
+        for c, cname in enumerate(col_order):
+            ax_c = fig.add_subplot(gs[0, c])
+            if cname == "Merge":
+                _style_dark_ax(ax_c, m_full)
+                _draw_merge_color_legend(ax_c)
+                _draw_image_scalebar(ax_c, m_full.shape[1], scalebar_um=scalebar_um, um_per_px=um_per_px, scalebar_label=scalebar_label, dark_bg=True)
+            else:
+                _style_dark_ax(ax_c, _render_fluor_rgb(groups_norm[g][cname], marker_colors[cname]), corner_tag=cname, tag_color=marker_colors[cname])
+            strip_axes.append(ax_c)
+        axes_out["strip_axes"] = strip_axes
+        return fig, axes_out
+
+    # Default: 'merge_left_grid' — Large Merge left + compact 2 x ceil(n_ch/2) single-channel tiles right
+    ncols_ch = int(np.ceil(n_ch / 2.0))
+    nrows_ch = 2 if n_ch > 2 else 1
+    ov_aspect = float(m_full.shape[1]) / max(1.0, float(m_full.shape[0]))
+    if roi_box is not None:
+        m_roi, (rx0, ry0, rx1, ry1) = _crop_roi(m_full, roi_box)
+        roi_aspect = float(m_roi.shape[1]) / max(1.0, float(m_roi.shape[0]))
+        ch_grid_aspect = roi_aspect * (float(ncols_ch) / float(nrows_ch))
+        gs = gs_parent.subgridspec(1, 3, width_ratios=[ov_aspect, roi_aspect, ch_grid_aspect], wspace=0.08)
+        ax_ov = fig.add_subplot(gs[0, 0])
+        ax_m = fig.add_subplot(gs[0, 1])
+        gs_ch = gs[0, 2].subgridspec(nrows_ch, ncols_ch, wspace=0.04, hspace=0.04)
+        _style_dark_ax(ax_ov, m_full, corner_tag="Overview", tag_color="#FFFFFF")
+        ax_ov.add_patch(Rectangle((rx0, ry0), rx1 - rx0, ry1 - ry0, fill=False, edgecolor="#000000", lw=1.45, ls="-", alpha=0.70, zorder=7))
+        ax_ov.add_patch(Rectangle((rx0, ry0), rx1 - rx0, ry1 - ry0, fill=False, edgecolor="#FFFFFF", lw=0.80, ls="--", zorder=8))
+        _draw_image_scalebar(ax_ov, m_full.shape[1], scalebar_um=scalebar_um, um_per_px=um_per_px, scalebar_label=scalebar_label, dark_bg=True)
+        _style_dark_ax(ax_m, m_roi)
+        _draw_merge_color_legend(ax_m)
+        _draw_image_scalebar(ax_m, m_roi.shape[1], scalebar_um=roi_scalebar_um, um_per_px=um_per_px, scalebar_label=roi_scalebar_label, dark_bg=True)
+        from matplotlib.patches import ConnectionPatch
+        for (oy, my) in [(ry0, 1.0), (ry1, 0.0)]:
+            con = ConnectionPatch(
+                xyA=(rx1, oy), coordsA=ax_ov.transData,
+                xyB=(0.0, my), coordsB=ax_m.transAxes,
+                color="#4B5563", lw=0.50, ls="--", alpha=0.82, zorder=20,
+            )
+            fig.add_artist(con)
+        axes_out["overview_ax"] = ax_ov
+    else:
+        ch_grid_aspect = ov_aspect * (float(ncols_ch) / float(nrows_ch))
+        gs = gs_parent.subgridspec(1, 2, width_ratios=[ov_aspect, ch_grid_aspect], wspace=0.06)
+        ax_m = fig.add_subplot(gs[0, 0])
+        gs_ch = gs[0, 1].subgridspec(nrows_ch, ncols_ch, wspace=0.04, hspace=0.04)
+        _style_dark_ax(ax_m, m_full)
+        _draw_merge_color_legend(ax_m)
+        _draw_image_scalebar(ax_m, m_full.shape[1], scalebar_um=scalebar_um, um_per_px=um_per_px, scalebar_label=scalebar_label, dark_bg=True)
+
+    ch_axes = []
+    for idx_m, m in enumerate(marker_names):
+        r, c = divmod(idx_m, ncols_ch)
+        ax_c = fig.add_subplot(gs_ch[r, c])
+        ch_arr = _crop_roi(groups_norm[g][m], roi_box)[0] if roi_box is not None else groups_norm[g][m]
+        _style_dark_ax(ax_c, _render_fluor_rgb(ch_arr, marker_colors[m]), corner_tag=m, tag_color=marker_colors[m])
+        ch_axes.append(ax_c)
+    axes_out["merge_ax"] = ax_m
+    axes_out["channel_axes"] = ch_axes
+    return fig, axes_out
+
+
+def plot_spatial_signal_grid(
+    samples: Sequence[Dict],
+    layers: Sequence[Dict],
+    shared_vlim: bool = True,
+    scalebar_um: float = 500.0,
+    units_per_um: float = 1.0,
+    pt_size: Optional[float] = None,
+    dark_bg: bool = False,
+    invert_y: bool = False,
+    fig: Optional[plt.Figure] = None,
+    subspec=None,
+    size_mm: Tuple[float, float] = (176.0, 95.0),
+    preset: str = "cns_compact",
+) -> Tuple[plt.Figure, Dict[str, object]]:
+    """
+    CNS Publication-Grade Multi-Signal Spatial Transcriptomics Synchronized Grid
+    (Visium / Visium HD / Xenium / CosMx / Stereo-seq).
+
+    Pairs 1 or multiple tissue samples (rows, e.g., Responder vs Non-Responder) across
+    N synchronized spatial signal columns (`H&E image`, `categorical niches/celltypes`,
+    and `continuous gene/signature scores`) with:
+      - Identical locked (xlim, ylim) and 1:1 physical aspect ratio across all columns per sample
+      - Honest shared column colorbar scaling (`shared_vlim=True`, 2nd-98th pct across all samples!)
+      - Optional synchronized dashed `roi_box` drawn identically across every layer of a sample
+      - Single clean physical scale bar per row (never cluttered across every tile!)
+      - Automatic 600-dpi rasterization for >2,000 spots/cells + 100% vector colorbars & titles
+
+    Parameters
+    ----------
+    samples : list of dicts, each representing one tissue section/row:
+                {
+                  "name": "Responder (CR)",
+                  "x": x_arr, "y": y_arr,
+                  "image": optional H&E RGB array or path,
+                  "image_extent": optional (xmin, xmax, ymin, ymax),
+                  "signals": {"Niche": cat_arr, "MKI67": float_arr, "Hypoxia score": float_arr, ...},
+                  "roi_box": optional (rx0, rx1, ry0, ry1) in data coords,
+                }
+    layers  : list of column spec dicts:
+                - {"kind": "image", "title": "H&E"}
+                - {"kind": "categorical", "key": "Niche", "title": "Spatial niches",
+                   "palette": {...}, "focal_groups": optional [...]}
+                - {"kind": "continuous", "key": "MKI67", "title": "MKI67",
+                   "cmap": "gray_crimson" | "gray_indigo" | "coolwarm", "vlim": optional (lo, hi),
+                   "cbar_label": optional str, "italic_title": optional bool}
+    """
+    from matplotlib.patches import Rectangle
+
+    apply_cns_style(preset)
+    n_rows = len(samples)
+    n_cols = len(layers)
+    if n_rows == 0 or n_cols == 0:
+        raise ValueError("Both `samples` and `layers` must be non-empty.")
+
+    # Pre-compute honest shared (vmin, vmax) across all rows for each continuous column
+    col_vlims: Dict[int, Tuple[float, float]] = {}
+    for c, lspec in enumerate(layers):
+        if lspec.get("kind") != "continuous":
+            continue
+        if lspec.get("vlim") is not None:
+            col_vlims[c] = (float(lspec["vlim"][0]), float(lspec["vlim"][1]))
+        elif shared_vlim:
+            key = lspec["key"]
+            pooled = np.concatenate([np.asarray(s["signals"][key], dtype=float).ravel() for s in samples])
+            if lspec.get("symmetric", False):
+                vmax = float(np.nanpercentile(np.abs(pooled), 98.0))
+                vmax = vmax if vmax > 1e-6 else 1.0
+                col_vlims[c] = (-vmax, vmax)
+            else:
+                lo = float(np.nanpercentile(pooled, 2.0))
+                hi = float(np.nanpercentile(pooled, 98.0))
+                col_vlims[c] = (lo, hi if hi > lo else lo + 1e-6)
+
+    if fig is None:
+        fig = new_cns_figure(size_mm[0], size_mm[1], preset=preset)
+        gs_parent = fig.add_gridspec(1, 1)[0]
+    else:
+        gs_parent = subspec if subspec is not None else fig.add_gridspec(1, 1)[0]
+
+    # Allocate a slim bottom row for clean shared column colorbars / categorical legend
+    gs_outer = gs_parent.subgridspec(2, 1, height_ratios=[float(n_rows) * 1.0, 0.16], hspace=0.06)
+    gs_grid = gs_outer[0].subgridspec(n_rows, n_cols, wspace=0.06, hspace=0.08)
+    gs_leg = gs_outer[1].subgridspec(1, n_cols, wspace=0.14)
+
+    grid_axes: List[List[plt.Axes]] = []
+    col_mappables: Dict[int, mpl.cm.ScalarMappable] = {}
+
+    for r, samp in enumerate(samples):
+        x = np.asarray(samp["x"], dtype=float)
+        y = np.asarray(samp["y"], dtype=float)
+        n_pts = len(x)
+        s_pt = pt_size if pt_size is not None else (0.28 if n_pts >= 25000 else (0.75 if n_pts >= 6000 else (2.4 if n_pts >= 1500 else 6.0)))
+        rast = n_pts > 2000
+
+        xr = (float(np.nanmin(x)), float(np.nanmax(x)))
+        yr = (float(np.nanmin(y)), float(np.nanmax(y)))
+        xs, ys = max(1e-6, xr[1] - xr[0]), max(1e-6, yr[1] - yr[0])
+        xlim = (xr[0] - xs * 0.03, xr[1] + xs * 0.03)
+        ylim = (yr[0] - ys * 0.03, yr[1] + ys * 0.03)
+
+        row_axes = []
+        for c, lspec in enumerate(layers):
+            ax = fig.add_subplot(gs_grid[r, c])
+            kind = lspec.get("kind", "continuous")
+            ax.set_facecolor("#0A0A0A" if dark_bg else "#FFFFFF")
+
+            if kind == "image":
+                img = _load_image_array(samp["image"])
+                ext = samp.get("image_extent", (xr[0], xr[1], yr[1], yr[0]) if invert_y else (xr[0], xr[1], yr[0], yr[1]))
+                ax.imshow(img, extent=ext, origin="upper", interpolation="nearest", rasterized=True)
+            elif kind == "categorical":
+                vals = np.asarray([str(v) for v in samp["signals"][lspec["key"]]])
+                pal = lspec["palette"]
+                focal = set(lspec["focal_groups"]) if lspec.get("focal_groups") else set(pal.keys())
+                muted = lspec.get("muted_color", "#E4E4E4")
+                is_f = np.array([v in focal for v in vals])
+                if np.any(~is_f):
+                    ax.scatter(x[~is_f], y[~is_f], s=s_pt * 0.85, c=muted, alpha=0.80, linewidths=0, rasterized=rast, zorder=1)
+                if np.any(is_f):
+                    fcols = [pal.get(v, "#3B6EA5") for v in vals[is_f]]
+                    ax.scatter(x[is_f], y[is_f], s=s_pt * 1.1, c=fcols, alpha=0.92, linewidths=0, rasterized=rast, zorder=2)
+            else:  # continuous
+                vals = np.asarray(samp["signals"][lspec["key"]], dtype=float)
+                cmap_obj = get_cns_cmap(lspec.get("cmap", "gray_crimson"))
+                if c in col_vlims:
+                    vmin, vmax = col_vlims[c]
+                else:
+                    vmin, vmax = float(np.nanpercentile(vals, 2.0)), float(np.nanpercentile(vals, 98.0))
+                    if vmax <= vmin:
+                        vmax = vmin + 1e-6
+                # Draw high-signal cells on top so hot niches are never buried by low-expression cells
+                order = np.argsort(np.nan_to_num(vals, nan=vmin))
+                sc = ax.scatter(
+                    x[order], y[order], c=vals[order], s=s_pt,
+                    cmap=cmap_obj, vmin=vmin, vmax=vmax,
+                    alpha=0.95, linewidths=0, rasterized=rast, zorder=2,
+                )
+                if c not in col_mappables:
+                    col_mappables[c] = mpl.cm.ScalarMappable(norm=mpl.colors.Normalize(vmin=vmin, vmax=vmax), cmap=cmap_obj)
+
+            ax.set_xlim(*xlim)
+            ax.set_ylim(ylim[1], ylim[0]) if invert_y else ax.set_ylim(*ylim)
+            ax.set_aspect("equal")
+            ax.set_xticks([])
+            ax.set_yticks([])
+            for sp in ax.spines.values():
+                sp.set_visible(True)
+                sp.set_linewidth(0.40)
+                sp.set_edgecolor("#333333" if dark_bg else "#DCDCDC")
+
+            # Synchronized ROI box across every signal column of this sample
+            if samp.get("roi_box") is not None:
+                rx0, rx1, ry0, ry1 = samp["roi_box"]
+                ax.add_patch(Rectangle(
+                    (rx0, ry0), rx1 - rx0, ry1 - ry0,
+                    fill=False, edgecolor="#FFFFFF" if dark_bg else "#1A1A1A",
+                    linewidth=0.65, linestyle="--", zorder=6,
+                ))
+
+            # Place ONE clean scale bar per row (on the first column only), preserving box spines
+            if c == 0 and scalebar_um:
+                add_spatial_scalebar(
+                    ax, scalebar_um, units_per_um=units_per_um,
+                    loc="lower right", dark_bg=(dark_bg or kind == "image"), pill_bg=(kind == "image"),
+                    hide_spines=False,
+                )
+
+            if r == 0:
+                t_str = lspec.get("title", lspec.get("key", ""))
+                ax.set_title(
+                    t_str, fontsize=6.2, fontweight="bold",
+                    fontstyle="italic" if lspec.get("italic_title", False) else "normal",
+                    pad=2.5, color="#000000",
+                )
+            if c == 0 and samp.get("name"):
+                ax.set_ylabel(str(samp["name"]), fontsize=6.0, fontweight="bold", color="#1A1A1A", labelpad=3.5)
+
+            row_axes.append(ax)
+        grid_axes.append(row_axes)
+
+    # Bottom strip: shared slim horizontal colorbars + categorical legend (zero wasted whitespace!)
+    cbar_axes = []
+    for c, lspec in enumerate(layers):
+        ax_l = fig.add_subplot(gs_leg[0, c])
+        ax_l.set_axis_off()
+        kind = lspec.get("kind", "continuous")
+        if kind == "continuous" and c in col_mappables:
+            cax = ax_l.inset_axes([0.12, 0.52, 0.76, 0.34])
+            cb = fig.colorbar(col_mappables[c], cax=cax, orientation="horizontal")
+            cb.outline.set_linewidth(0.40)
+            cb.ax.tick_params(labelsize=4.8, length=1.8, width=0.40, pad=1.0)
+            vmin, vmax = col_mappables[c].norm.vmin, col_mappables[c].norm.vmax
+            ticks = [vmin, 0.0, vmax] if (vmin < 0 < vmax) else [vmin, 0.5 * (vmin + vmax), vmax]
+            cb.set_ticks(ticks)
+            cb.set_ticklabels([f"{t:.1f}" for t in ticks])
+            if lspec.get("cbar_label"):
+                cb.set_label(lspec["cbar_label"], fontsize=5.0, labelpad=1.5)
+            cbar_axes.append(cax)
+        elif kind == "categorical":
+            pal = lspec["palette"]
+            keys_show = lspec.get("focal_groups") or list(pal.keys())
+            handles = [
+                mpl.lines.Line2D([0], [0], marker="o", linestyle="none", markersize=3.2,
+                                 markerfacecolor=pal[k], markeredgecolor="none", label=str(k))
+                for k in keys_show if k in pal
+            ]
+            ax_l.legend(
+                handles=handles, loc="center", ncol=min(2, max(1, len(handles))),
+                frameon=False, fontsize=4.8, handletextpad=0.25, columnspacing=0.6, labelspacing=0.18,
+            )
+
+    return fig, {"grid_axes": grid_axes, "cbar_axes": cbar_axes, "col_vlims": col_vlims}
+
+
 def add_umap_corner_axes(
     ax: plt.Axes,
     xlabel: str = "UMAP1",
     ylabel: str = "UMAP2",
     arrow_mm: Optional[float] = 8.0,
-    frac: float = 0.18,
+    frac: float = 0.17,
     lw: float = 0.5,
     fontsize: float = 5.5,
     origin: Tuple[float, float] = (0.02, 0.02),
+    label_pad_mm: float = 1.15,
+    color: str = "#1A1A1A",
 ) -> None:
     """
     Replace full UMAP box/ticks with compact CNS mini L-shaped corner arrows
-    having EXACTLY EQUAL PHYSICAL LENGTH (in mm) along both X and Y!
+    having EXACTLY EQUAL PHYSICAL LENGTH (in mm) along BOTH X and Y at final draw/save time!
+
+    Uses live render-time `offset_copy(ax.transAxes, ..., units="inches")` transforms so
+    horizontal and vertical arrows remain IDENTICALLY long (default 8.0 mm x 8.0 mm) even
+    after `constrained_layout`, `tight_layout()`, `colorbar()`, `legend()`, `set_aspect("equal")`,
+    or figure resizing — completely eliminating unequal X/Y lengths and inconsistent panel-to-panel
+    arrow sizes.
     """
+    from matplotlib.transforms import offset_copy
+
     ax.set_xticks([])
     ax.set_yticks([])
     for sp in ax.spines.values():
         sp.set_visible(False)
 
-    # Compute exact axes physical size in mm so horizontal & vertical arrows are identically long!
     fig = ax.figure
-    fig.canvas.draw()
-    bbox = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
-    ax_w_mm = max(1e-3, bbox.width * MM_PER_INCH)
-    ax_h_mm = max(1e-3, bbox.height * MM_PER_INCH)
-
     if arrow_mm is not None:
-        len_mm = min(float(arrow_mm), 0.35 * min(ax_w_mm, ax_h_mm))
+        len_mm = float(arrow_mm)
     else:
-        len_mm = float(frac) * min(ax_w_mm, ax_h_mm)
+        # Fallback if caller explicitly opts into proportional sizing via arrow_mm=None
+        fig.canvas.draw()
+        bbox = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
+        min_mm = max(12.0, min(bbox.width, bbox.height) * MM_PER_INCH)
+        len_mm = float(np.clip(float(frac) * min_mm, 5.5, 11.0))
 
-    fx = len_mm / ax_w_mm
-    fy = len_mm / ax_h_mm
-    pad_x = 1.2 / ax_w_mm  # 1.2 mm label offset
-    pad_y = 1.2 / ax_h_mm
+    len_in = len_mm / MM_PER_INCH
+    pad_in = float(label_pad_mm) / MM_PER_INCH
+
+    trans_origin = ax.transAxes
+    trans_tip_x = offset_copy(ax.transAxes, fig=fig, x=len_in, y=0.0, units="inches")
+    trans_tip_y = offset_copy(ax.transAxes, fig=fig, x=0.0, y=len_in, units="inches")
+    trans_lbl_x = offset_copy(ax.transAxes, fig=fig, x=0.5 * len_in, y=-pad_in, units="inches")
+    trans_lbl_y = offset_copy(ax.transAxes, fig=fig, x=-pad_in, y=0.5 * len_in, units="inches")
 
     x0, y0 = origin
+    arrow_kw = dict(arrowstyle="-|>", lw=lw, color=color, mutation_scale=5, shrinkA=0, shrinkB=0)
     ax.annotate(
-        "", xy=(x0 + fx, y0), xytext=(x0, y0),
-        xycoords="axes fraction",
-        arrowprops=dict(arrowstyle="-|>", lw=lw, color="#1A1A1A", mutation_scale=5, shrinkA=0, shrinkB=0),
+        "", xy=(x0, y0), xycoords=trans_tip_x,
+        xytext=(x0, y0), textcoords=trans_origin,
+        arrowprops=arrow_kw, annotation_clip=False, zorder=10,
     )
     ax.annotate(
-        "", xy=(x0, y0 + fy), xytext=(x0, y0),
-        xycoords="axes fraction",
-        arrowprops=dict(arrowstyle="-|>", lw=lw, color="#1A1A1A", mutation_scale=5, shrinkA=0, shrinkB=0),
+        "", xy=(x0, y0), xycoords=trans_tip_y,
+        xytext=(x0, y0), textcoords=trans_origin,
+        arrowprops=arrow_kw, annotation_clip=False, zorder=10,
     )
-    ax.text(x0 + fx * 0.5, y0 - pad_y, xlabel, transform=ax.transAxes,
-            fontsize=fontsize, ha="center", va="top", color="#1A1A1A")
-    ax.text(x0 - pad_x, y0 + fy * 0.5, ylabel, transform=ax.transAxes,
-            fontsize=fontsize, ha="right", va="center", rotation=90, color="#1A1A1A")
+    ax.text(
+        x0, y0, xlabel, transform=trans_lbl_x,
+        fontsize=fontsize, ha="center", va="top", color=color, clip_on=False, zorder=10,
+    )
+    ax.text(
+        x0, y0, ylabel, transform=trans_lbl_y,
+        fontsize=fontsize, ha="right", va="center", rotation=90, color=color, clip_on=False, zorder=10,
+    )
 
 
 def plot_cloudy_umap(
@@ -809,6 +1671,7 @@ def plot_cloudy_umap(
     label_style: str = "colored",
     label_fontsize: float = 5.5,
     show_corner_axes: bool = True,
+    arrow_mm: Optional[float] = 8.0,
     axis_frac: float = 0.17,
     axis_labels: Tuple[str, str] = ("UMAP1", "UMAP2"),
     seed: int = 42,
@@ -817,7 +1680,8 @@ def plot_cloudy_umap(
     Zemin Zhang Lab-style "Cloudy / Watercolor" Hybrid UMAP on an Axes:
       - Shuffled draw order + soft low-alpha mist underlayer + translucent fine core dots,
         rasterized at 600 dpi when exported via save_ai_figure()
-      - 100% vector editable bottom-left mini L-shaped corner arrow axes
+      - 100% vector editable bottom-left mini L-shaped corner arrow axes locked to exact
+        equal physical length (`arrow_mm=8.0` mm along both X and Y, immune to layout shifts)
       - 100% vector editable Arial cluster labels placed at robust median centroids
     """
     x = np.asarray(x, dtype=float)
@@ -860,11 +1724,11 @@ def plot_cloudy_umap(
     ax.set_ylim(yr[0] - yspan * 0.10, yr[1] + yspan * 0.06)
     ax.set_aspect("equal", adjustable="box")
 
-    # Layer 2 (100% vector): equal-physical-length mini L-shaped corner arrows
+    # Layer 2 (100% vector): exact equal-physical-mm mini L-shaped corner arrows (default 8.0 mm)
     if show_corner_axes:
         add_umap_corner_axes(
             ax, xlabel=axis_labels[0], ylabel=axis_labels[1],
-            arrow_mm=None, frac=axis_frac, lw=0.45, fontsize=5.5, origin=(0.04, 0.04),
+            arrow_mm=arrow_mm, frac=axis_frac, lw=0.45, fontsize=5.5, origin=(0.04, 0.04),
         )
     else:
         ax.set_xticks([])
@@ -1522,16 +2386,21 @@ def smart_rotate_xticklabels(
     tilt45_upper_ratio: float = 3.80,
     wrap_two_word: bool = True,
     fontsize: Optional[float] = None,
+    axis_width_mm: Optional[float] = None,
 ) -> Dict:
     """
     Automatically choose optimal CNS x-axis tick rotation angle using physical mm pitch.
     NEVER uses negative (-45°/-90°) angles on bottom axes; always pins right-top anchor cleanly
     under each tick (`ha='right', rotation_mode='anchor'`) to maximize space efficiency!
+    Pass `axis_width_mm` if calling before final layout to avoid stale pre-layout box width.
     """
-    fig = ax.figure
-    fig.canvas.draw()
-    bbox = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
-    ax_w_mm = max(1.0, bbox.width * MM_PER_INCH)
+    if axis_width_mm is not None:
+        ax_w_mm = max(1.0, float(axis_width_mm))
+    else:
+        fig = ax.figure
+        fig.canvas.draw()
+        bbox = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
+        ax_w_mm = max(1.0, bbox.width * MM_PER_INCH)
 
     if labels is not None:
         lbls = [str(x) for x in labels]
@@ -2294,16 +3163,22 @@ def add_spatial_scalebar(
     lw: float = 1.4,
     fontsize: float = 5.4,
     pill_bg: bool = False,
+    hide_spines: bool = True,
 ) -> None:
     """
-    Remove raw pixel ticks/spines, enforce 1:1 physical aspect ratio, and stamp a
-    true vector physical scale bar (e.g., 50 μm, 100 μm, 500 μm, 1 mm).
+    Remove raw pixel ticks/spines (optional), enforce 1:1 physical aspect ratio, and stamp a
+    true vector physical scale bar (e.g., 50 μm, 100 μm, 500 μm, 1 mm) whose bar length is
+    exact in data coordinates while label clearance is locked at a fixed 1.1 mm above the bar
+    via render-time `offset_copy` (immune to panel height and inverted image Y-axes!).
     """
+    from matplotlib.transforms import offset_copy
+
     ax.set_aspect("equal", adjustable="box")
     ax.set_xticks([])
     ax.set_yticks([])
-    for sp in ax.spines.values():
-        sp.set_visible(False)
+    if hide_spines:
+        for sp in ax.spines.values():
+            sp.set_visible(False)
 
     x0, x1 = ax.get_xlim()
     y0, y1 = ax.get_ylim()
@@ -2317,33 +3192,30 @@ def add_spatial_scalebar(
         lbl = f"{int(round(length_um))} μm"
 
     fg = "#FFFFFF" if dark_bg else "#1A1A1A"
-    # Handle inverted y-axis (image coords where y0 > y1) cleanly
+    bg_pill = "#000000" if dark_bg else "#FFFFFF"
+    # Visual bottom of axes regardless of normal (y1 > y0) or inverted image (y0 > y1) coordinates
     y_bot = min(y0, y1) + yspan * pad_frac if y1 > y0 else max(y0, y1) - yspan * pad_frac
-    y_txt_off = yspan * 0.025 if y1 > y0 else -yspan * 0.025
-    va_txt = "bottom" if y1 > y0 else "bottom"
 
     if "right" in loc:
-        bx1 = max(x0, x1) - xspan * pad_frac
-        bx0 = bx1 - bar_len
+        bx1 = max(x0, x1) - xspan * pad_frac if x1 > x0 else min(x0, x1) + xspan * pad_frac
+        bx0 = bx1 - bar_len if x1 > x0 else bx1 + bar_len
     else:
-        bx0 = min(x0, x1) + xspan * pad_frac
-        bx1 = bx0 + bar_len
+        bx0 = min(x0, x1) + xspan * pad_frac if x1 > x0 else max(x0, x1) - xspan * pad_frac
+        bx1 = bx0 + bar_len if x1 > x0 else bx0 - bar_len
+
+    fig = ax.figure
+    # Render-time physical +1.1 mm upward offset works identically for normal AND inverted Y-axes!
+    trans_txt = offset_copy(ax.transData, fig=fig, x=0.0, y=1.1 / MM_PER_INCH, units="inches")
 
     if pill_bg:
-        pad_x = xspan * 0.02
-        pad_y = yspan * 0.02
-        y_lo_p = min(y_bot, y_bot + y_txt_off * 3.0) - pad_y
-        h_p = abs(y_txt_off * 3.2) + 2 * pad_y
-        rect = mpl.patches.FancyBboxPatch(
-            (bx0 - pad_x, y_lo_p), (bx1 - bx0) + 2 * pad_x, h_p,
-            boxstyle="round,pad=0.0,rounding_size=" + str(min(xspan, yspan) * 0.015),
-            facecolor=("#000000" if dark_bg else "#FFFFFF"), edgecolor="none", alpha=0.68, zorder=9,
-        )
-        ax.add_patch(rect)
-
+        # Subtle high-contrast halo directly behind bar + tight text bbox (never clips or balloons!)
+        ax.plot([bx0, bx1], [y_bot, y_bot], color=bg_pill, linewidth=lw + 1.8,
+                alpha=0.72, solid_capstyle="butt", zorder=9)
     ax.plot([bx0, bx1], [y_bot, y_bot], color=fg, linewidth=lw, solid_capstyle="butt", zorder=10)
-    ax.text((bx0 + bx1) * 0.5, y_bot + y_txt_off, lbl, ha="center", va=va_txt,
-            fontsize=fontsize, color=fg, fontweight="bold", zorder=10)
+    txt_kw = dict(ha="center", va="bottom", fontsize=fontsize, color=fg, fontweight="bold", zorder=11)
+    if pill_bg:
+        txt_kw["bbox"] = dict(boxstyle="round,pad=0.10", facecolor=bg_pill, edgecolor="none", alpha=0.68)
+    ax.text((bx0 + bx1) * 0.5, y_bot, lbl, transform=trans_txt, **txt_kw)
 
 
 def plot_spatial_tissue_zoom(
@@ -3785,6 +4657,8 @@ def plot_cox_forest(
     sig_color: str = "#C84B4B",
     protect_color: str = "#2A9D8F",
     ns_color: str = "#595959",
+    hr_col_mm: float = 2.5,
+    p_col_mm: float = 19.5,
 ) -> None:
     """
     Publication Multivariable Cox Forest Plot (14.2% of Tier-1 2025-2026 tumor papers!):
@@ -3825,19 +4699,27 @@ def plot_cox_forest(
     ax.tick_params(axis="y", length=0)
     ax.spines["left"].set_visible(False)
 
-    # Crisp right-side inline HR (95% CI) + italic p table using axes transform!
-    ax.text(1.06, 1.01, "HR (95% CI)", transform=ax.transAxes, ha="left", va="bottom",
-            fontsize=5.0, fontweight="bold", color="#1A1A1A")
-    ax.text(1.86, 1.01, "$p$", transform=ax.transAxes, ha="left", va="bottom",
-            fontsize=5.0, fontweight="bold", color="#1A1A1A")
+    # Crisp right-side inline HR (95% CI) + italic p table using live physical-mm X offsets
+    # blended with live `ax.transData` Y coordinates (never collides on narrow plots, never flies
+    # off wide plots, and stays locked to each whisker row even if ylim is modified later!).
+    from matplotlib.transforms import blended_transform_factory, offset_copy
+    fig = ax.figure
+    tx_hr_hdr = offset_copy(ax.transAxes, fig=fig, x=hr_col_mm / MM_PER_INCH, y=0.8 / MM_PER_INCH, units="inches")
+    tx_p_hdr = offset_copy(ax.transAxes, fig=fig, x=p_col_mm / MM_PER_INCH, y=0.8 / MM_PER_INCH, units="inches")
+    tx_hr_row = blended_transform_factory(offset_copy(ax.transAxes, fig=fig, x=hr_col_mm / MM_PER_INCH, y=0.0, units="inches"), ax.transData)
+    tx_p_row = blended_transform_factory(offset_copy(ax.transAxes, fig=fig, x=p_col_mm / MM_PER_INCH, y=0.0, units="inches"), ax.transData)
+
+    ax.text(1.0, 1.0, "HR (95% CI)", transform=tx_hr_hdr, ha="left", va="bottom",
+            fontsize=5.0, fontweight="bold", color="#1A1A1A", clip_on=False)
+    ax.text(1.0, 1.0, "$p$", transform=tx_p_hdr, ha="left", va="bottom",
+            fontsize=5.0, fontweight="bold", color="#1A1A1A", clip_on=False)
     for yv, hr, lo, hi, pv in zip(ys, hrs_a, lo_a, hi_a, ps_a):
-        y_frac = (yv - (-0.6)) / ((n - 0.1) - (-0.6))
-        ax.text(1.06, y_frac, f"{hr:.2f} ({lo:.2f}–{hi:.2f})", transform=ax.transAxes,
-                ha="left", va="center", fontsize=4.8, color="#1A1A1A")
+        ax.text(1.0, yv, f"{hr:.2f} ({lo:.2f}–{hi:.2f})", transform=tx_hr_row,
+                ha="left", va="center", fontsize=4.8, color="#1A1A1A", clip_on=False)
         p_str = "< 0.001" if pv < 0.001 else f"{pv:.3f}"
-        ax.text(1.86, y_frac, p_str, transform=ax.transAxes, ha="left", va="center",
+        ax.text(1.0, yv, p_str, transform=tx_p_row, ha="left", va="center",
                 fontsize=4.8, fontweight=("bold" if pv < 0.05 else "normal"),
-                color=("#1A1A1A" if pv < 0.05 else "#666666"))
+                color=("#1A1A1A" if pv < 0.05 else "#666666"), clip_on=False)
 
 
 def plot_swimmer_plot(
